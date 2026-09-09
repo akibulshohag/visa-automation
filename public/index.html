@@ -1,0 +1,3721 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IVAC Automation Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #1a1d2e;
+      --bg3: #242740;
+      --border: #2e3250;
+      --accent: #6366f1;
+      --accent2: #818cf8;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --info: #38bdf8;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header-brand h1 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .header-brand span {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Status */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .status-badge.idle {
+      background: rgba(100, 116, 139, .15);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .status-badge.running {
+      background: rgba(34, 197, 94, .12);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, .3);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-badge.running .status-dot {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .5;
+        transform: scale(.8)
+      }
+    }
+
+    /* Captcha badge */
+    .captcha-badge {
+      background: rgba(56, 189, 248, .08);
+      border: 1px solid rgba(56, 189, 248, .2);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 11px;
+      color: var(--info);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .captcha-badge:hover {
+      background: rgba(56, 189, 248, .15);
+    }
+
+    /* Server Clock badge */
+    .clock-badge {
+      background: rgba(139, 92, 246, .08);
+      border: 1px solid rgba(139, 92, 246, .2);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 22px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .tab {
+      padding: 11px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+
+    .tab:hover {
+      color: var(--text);
+    }
+
+    .tab.active {
+      color: var(--accent2);
+      border-bottom-color: var(--accent);
+    }
+
+    .main {
+      padding: 20px 22px;
+      max-width: 100% !important;
+      margin: 0 auto;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeUp .2s ease;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(6px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 14px;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: inherit;
+    }
+
+    .btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #4f46e5;
+    }
+
+    .btn-success {
+      background: rgba(34, 197, 94, .15);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, .3);
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: rgba(34, 197, 94, .25);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, .12);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, .25);
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(239, 68, 68, .22);
+    }
+
+    .btn-info {
+      background: rgba(56, 189, 248, .12);
+      color: var(--info);
+      border: 1px solid rgba(56, 189, 248, .25);
+    }
+
+    .btn-info:hover:not(:disabled) {
+      background: rgba(56, 189, 248, .22);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--bg3);
+      color: var(--text);
+    }
+
+    .btn-warn {
+      background: rgba(245, 158, 11, .12);
+      color: var(--warn);
+      border: 1px solid rgba(245, 158, 11, .25);
+    }
+
+    .btn-warn:hover:not(:disabled) {
+      background: rgba(245, 158, 11, .22);
+    }
+
+    .btn-sm {
+      padding: 4px 9px;
+      font-size: 11px;
+    }
+
+    /* Auto-start panel */
+    .autostart-panel {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .countdown {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--warn);
+      min-width: 80px;
+    }
+
+    .countdown.inactive {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Dashboard grid */
+    .accounts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .account-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .account-card-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+
+    .account-phone {
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      flex: 1;
+    }
+
+    .account-status {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .status-IDLE {
+      background: rgba(100, 116, 139, .15);
+      color: var(--muted);
+    }
+
+    .status-RUNNING {
+      background: rgba(34, 197, 94, .15);
+      color: var(--success);
+    }
+
+    .status-COMPLETED {
+      background: rgba(99, 102, 241, .15);
+      color: var(--accent2);
+    }
+
+    .status-FAILED {
+      background: rgba(239, 68, 68, .15);
+      color: var(--danger);
+    }
+
+    .account-card-controls {
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      background: rgba(0, 0, 0, .15);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .step-select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 8px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .step-select:focus {
+      border-color: var(--accent);
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 32px;
+      height: 18px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--muted);
+      transition: .2s;
+      border-radius: 18px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+
+    input:checked+.toggle-slider {
+      background-color: var(--success);
+    }
+
+    input:checked+.toggle-slider:before {
+      transform: translateX(14px);
+    }
+
+    .token-timer {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, .15);
+      color: var(--warn);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      display: none;
+    }
+
+    .token-timer.active {
+      display: flex;
+    }
+
+    .log-panel {
+      height: 220px;
+      overflow-y: auto;
+      padding: 8px 12px;
+      background: #0a0c14;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .log-panel::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .log-panel::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 10px;
+    }
+
+    .log-panel a {
+      color: #60a5fa;
+      text-decoration: underline;
+      word-break: break-all;
+      transition: color .15s;
+    }
+
+    .log-panel a:hover {
+      color: #93c5fd;
+    }
+
+    .log-panel a:visited {
+      color: #a78bfa;
+      text-decoration: underline;
+      text-decoration-style: dashed;
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 6px;
+    }
+
+    .log-time {
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .log-INFO {
+      color: var(--text);
+    }
+
+    .log-WARN {
+      color: var(--warn);
+    }
+
+    .log-ERROR {
+      color: var(--danger);
+    }
+
+    .log-empty {
+      color: var(--muted);
+      font-style: italic;
+      text-align: center;
+      margin-top: 85px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+    }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      padding: 9px 13px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 11px 13px;
+      border-bottom: 1px solid rgba(46, 50, 80, .5);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, .018);
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* Form */
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    input,
+    textarea,
+    select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 11px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+      width: 100%;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--accent);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .72);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .modal-overlay.open {
+      display: flex;
+      animation: fadeUp .2s ease;
+    }
+
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 26px;
+      width: 500px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
+
+    /* Config grid */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 14px;
+    }
+
+    /* Proxy */
+    .proxy-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      margin: 2px;
+    }
+
+    .proxy-del {
+      cursor: pointer;
+      color: var(--muted);
+      background: none;
+      border: none;
+      font-size: 12px;
+      line-height: 1;
+      transition: color .1s;
+    }
+
+    .proxy-del:hover {
+      color: var(--danger);
+    }
+
+    /* Row actions */
+    .row-actions {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 13px;
+      transform: translateY(60px);
+      opacity: 0;
+      transition: all .25s;
+      z-index: 9999;
+      max-width: 300px;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    #toast.success {
+      border-color: rgba(34, 197, 94, .4);
+      color: var(--success);
+    }
+
+    #toast.error {
+      border-color: rgba(239, 68, 68, .4);
+      color: var(--danger);
+    }
+
+    #toast.warn {
+      border-color: rgba(245, 158, 11, .4);
+      color: var(--warn);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-header h2 {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .gap-4 {
+      display: flex;
+      gap: 16px;
+      flex-direction: column;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="logo">🤖</div>
+      <div>
+        <h1>IVAC Automation</h1>
+        <span>Multi-Account Bot Dashboard</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="server-clock" class="clock-badge">
+        🕒 --:--:--.---
+      </div>
+      <div id="captcha-badge" class="captcha-badge" onclick="fillCaptchaPool()" title="Click to fill pool">
+        🔐 Captcha Pool: <strong id="captcha-count">?/8</strong>
+      </div>
+      <div id="status-badge" class="status-badge idle">
+        <div class="status-dot"></div>
+        <span id="status-text">Idle</span>
+      </div>
+      <button class="btn btn-info" onclick="launchSolver()"
+        style="background:rgba(56, 189, 248, .15);color:var(--info);border:1px solid rgba(56, 189, 248, .3);"
+        title="Open a dedicated window for mass solving captchas">🧩 Open Solver</button>
+      <button id="btn-start" class="btn btn-success" onclick="startAll()">▶ Start All</button>
+      <button id="btn-stop" class="btn btn-danger" onclick="stopAll()" disabled>⏹ Stop All</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab" data-tab="dashboard">📊 Dashboard</div>
+    <div class="tab" data-tab="accounts">👤 Accounts & Proxies & IPs</div>
+    <div class="tab" data-tab="proxies">🌐 Proxies</div>
+    <div class="tab" data-tab="live-test">🟢 Live Test</div>
+    <div class="tab" data-tab="callbacks">🔄 Callback Retry</div>
+    <div class="tab" data-tab="cipher">🔐 Cipher Keys</div>
+    <div class="tab" data-tab="signup">📝 Signup</div>
+    <div class="tab" data-tab="settings">⚙️ Settings</div>
+  </div>
+
+  <div class="main">
+
+    <!-- Dashboard -->
+    <div id="tab-dashboard" class="tab-content active">
+
+      <!-- Unified Control Panel -->
+      <div
+        style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+
+          <!-- Section label -->
+          <span
+            style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-right:6px;">⚙️
+            Controls</span>
+
+          <!-- Divider -->
+          <span style="width:1px;height:22px;background:var(--border);margin:0 4px;"></span>
+
+          <!-- Global Step -->
+          <select id="global-step-select" class="step-select" style="min-width:150px;" onchange="changeGlobalStep()"
+            title="Set step for all accounts">
+            <option value="" disabled selected>🌍 Global Step...</option>
+            <option value="0">0: Sign In</option>
+            <option value="1">1: Verify OTP</option>
+            <option value="2">2: File Upload</option>
+            <option value="3">3: Reserve Slot</option>
+            <option value="4">4: Payment Init</option>
+          </select>
+
+          <!-- Divider -->
+          <span style="width:1px;height:22px;background:var(--border);margin:0 4px;"></span>
+
+          <!-- Auto-start fields -->
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap;">AUTO START</span>
+            <div id="countdown" class="countdown inactive" style="font-size:13px;min-width:56px;">--:--:--</div>
+            <input id="autostart-time" type="text" value="17:00:00" placeholder="Start HH:MM:SS"
+              style="font-family:'JetBrains Mono',monospace;font-size:11px;width:100px;padding:4px 8px;">
+            <input id="captcha-warm-time" type="text" value="16:59:15" placeholder="Warm HH:MM:SS"
+              style="font-family:'JetBrains Mono',monospace;font-size:11px;width:100px;padding:4px 8px;"
+              title="Captcha pre-warm time">
+            <input id="otp-request-timeout" type="text" value="40" placeholder="Timeout (s)"
+              style="font-family:'JetBrains Mono',monospace;font-size:11px;width:80px;padding:4px 8px;"
+              title="OTP Verify API request timeout in seconds before running in background">
+            <input id="autostart-offset" type="number" value="-1" placeholder="Offset (ms)"
+              style="font-family:'JetBrains Mono',monospace;font-size:11px;width:80px;padding:4px 8px;"
+              title="Auto-start offset in milliseconds (e.g. -2 for 2ms early, 10 for 10ms late)">
+            <button class="btn btn-primary btn-sm" onclick="setAutoStart()">⏰ Set</button>
+            <button id="btn-cancel-auto" class="btn btn-warn btn-sm" onclick="cancelAutoStart()" disabled>✕</button>
+            <button class="btn btn-ghost btn-sm" onclick="fillCaptchaPool()" title="Fill captcha pool">🔐 Fill</button>
+          </div>
+
+        </div>
+
+        <!-- ⚙️ Bot Config — collapsible labeled grid -->
+        <style>
+          .cfg-panel { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; }
+          .cfg-panel-head { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+          .cfg-panel-title { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; }
+          .cfg-toggle-chevron { font-size: 10px; color: var(--muted); transition: transform .15s ease; }
+          .cfg-panel.open .cfg-toggle-chevron { transform: rotate(90deg); }
+          .cfg-panel-hint { font-size: 10px; color: var(--muted); font-weight: 500; }
+          .cfg-panel.open .cfg-panel-hint { display: none; }
+          .cfg-panel-spacer { flex: 1; }
+          .cfg-panel-body { display: none; margin-top: 12px; }
+          .cfg-panel.open .cfg-panel-body { display: block; }
+          .cfg-group { margin-bottom: 14px; }
+          .cfg-group:last-child { margin-bottom: 0; }
+          .cfg-group-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; border-left: 2px solid var(--accent); padding-left: 7px; }
+          .cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 9px 11px; }
+          .cfg-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+          .cfg-cell label { font-size: 11px; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+          .cfg-cell input, .cfg-cell select { width: 100%; padding: 6px 8px; font-size: 12px; box-sizing: border-box; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+          .cfg-cell input:focus, .cfg-cell select:focus { outline: none; border-color: var(--accent); }
+        </style>
+        <div class="cfg-panel" id="cfg-panel">
+          <div class="cfg-panel-head" onclick="toggleConfigPanel()" title="Show / hide bot config">
+            <span class="cfg-toggle-chevron">▶</span>
+            <span class="cfg-panel-title">⚙️ Bot Config</span>
+            <span class="cfg-panel-hint">(click to expand)</span>
+            <span class="cfg-panel-spacer"></span>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); saveConfig()" title="Save all bot config">💾 Save Config</button>
+          </div>
+          <div class="cfg-panel-body">
+            <div id="config-grid"><!-- filled dynamically by loadConfig() --></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Per-account log panels -->
+      <div class="top-bar">
+        <div style="font-size:17px;font-weight:700;">Live Logs</div>
+        <button class="btn btn-ghost btn-sm" onclick="clearAllLogs()">🗑 Clear</button>
+      </div>
+      <div id="accounts-grid" class="accounts-grid">
+        <div style="color:var(--muted);font-size:13px;padding:40px;">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Accounts & Proxies -->
+    <div id="tab-accounts" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="card-title">Add New Account</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Name (Optional)</label>
+              <input id="new-name" type="text" placeholder="John Doe">
+            </div>
+            <div class="form-group">
+              <label>Email (For Adv. OTP)</label>
+              <input id="new-email" type="email" placeholder="john@example.com">
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input id="new-phone" type="text" placeholder="01712345678">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input id="new-password" type="text" placeholder="password">
+            </div>
+            <div class="form-group">
+              <label>Assigned IP</label>
+              <select id="new-assigned-ip">
+                <option value="">Default (api.ivacbd.com)</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addAccount()">+ Add</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Accounts</h2>
+            <button class="btn btn-ghost btn-sm" onclick="loadAccounts()">↺ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Password</th>
+                  <th>Status</th>
+                  <th>Last Run</th>
+                  <th>Proxies</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="accounts-table">
+                <tr>
+                  <td colspan="7" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="gap-4" style="margin-top: 20px;">
+        <div class="card">
+          <div class="card-title">Add Bypass IP</div>
+          <div class="form-row">
+            <div class="form-group">
+              <input id="new-api-ip" type="text" placeholder="e.g. 52.66.96.83">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addApiIp()">+ Add IP</button>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top: 10px;">
+            <div class="form-group">
+              <textarea id="bulk-api-ips" placeholder="Paste multiple IPs here (one per line)"></textarea>
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addBulkApiIps()">+ Bulk Add IPs</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Origin Bypass IPs</h2>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-danger btn-sm" onclick="bulkDeleteApiIps()">🗑 Bulk Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadApiIps()">↺ Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px;"><input type="checkbox" id="selectAllApiIps" onclick="toggleSelectAllApiIps(this)"></th>
+                  <th>IP Address</th>
+                  <th>Status</th>
+                  <th>Added On</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="api-ips-table">
+                <tr>
+                  <td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proxies (Global Manager) -->
+    <div id="tab-proxies" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="card-title">Add Proxies</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:12px;color:var(--muted);">Assign to account</label>
+              <select id="proxy-add-account"></select>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top: 10px;">
+            <div class="form-group">
+              <textarea id="proxy-add-bulk" placeholder="Paste proxies, one per line&#10;socks5://user:pass@ip:port&#10;http://ip:port&#10;ip:port:user:pass"></textarea>
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addProxiesGlobal()">+ Add Proxies</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>All Proxies</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <select id="proxy-filter-account" onchange="renderProxies()" style="max-width:200px;"></select>
+              <select id="proxy-filter-status" onchange="renderProxies()" style="max-width:140px;">
+                <option value="all">All status</option>
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+              </select>
+              <button class="btn btn-danger btn-sm" onclick="bulkDeleteProxies()">🗑 Bulk Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadProxies()">↺ Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px;"><input type="checkbox" id="selectAllProxies" onclick="toggleSelectAllProxies(this)"></th>
+                  <th>Proxy URL</th>
+                  <th>Status</th>
+                  <th>Added On</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="proxies-table">
+                <tr>
+                  <td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Test -->
+    <div id="tab-live-test" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="section-header">
+            <h2>EC2 Bypass IPs Live Test</h2>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-primary btn-sm" onclick="testAllIps()">🚀 Test All IPs</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadLiveTestIps()">↺ Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>IP Address</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="live-test-table">
+                <tr>
+                  <td colspan="3" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Callback Retry -->
+    <div id="tab-callbacks" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="card-title">Add Callback Task</div>
+          <div class="form-row">
+            <div class="form-group" style="flex: 3;">
+              <label>Callback URI</label>
+              <input id="new-callback-uri" type="text"
+                placeholder="https://api.ivacbd.com/iams/api/v1/payment/dg-epay/callback?tran_id=...">
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label>Interval (ms)</label>
+              <input id="new-callback-interval" type="number" value="1000" min="50">
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label>Workers</label>
+              <input id="new-callback-workers" type="number" value="1" min="1" max="100">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addCallbackTask()">+ Add Task</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Active Callback Tasks</h2>
+            <button class="btn btn-ghost btn-sm" onclick="loadCallbackTasks()">↺ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50%;">URI</th>
+                  <th>Interval</th>
+                  <th>Workers</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="callbacks-table">
+                <tr>
+                  <td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signup (auto sign-up queue) -->
+    <div id="tab-signup" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="card-title">Add Account to Sign Up</div>
+          <p style="color:var(--muted); font-size:12px; margin:0 0 10px;">
+            <b>Email, Phone</b> and <b>Password</b> are required. The rest are optional.
+          </p>
+          <div class="form-row">
+            <div class="form-group" style="flex:2;">
+              <label>Email <span style="color:#e74c3c;">*</span></label>
+              <input id="su-in-email" type="email" placeholder="john@example.com">
+            </div>
+            <div class="form-group" style="flex:1.4;">
+              <label>Phone <span style="color:#e74c3c;">*</span></label>
+              <input id="su-in-phone" type="text" placeholder="018XXXXXXXX">
+            </div>
+            <div class="form-group" style="flex:1.4;">
+              <label>Password <span style="color:#e74c3c;">*</span></label>
+              <input id="su-in-password" type="text" placeholder="Passw0rd!">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex:1;">
+              <label>Given name</label>
+              <input id="su-in-given" type="text" placeholder="John">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Surname</label>
+              <input id="su-in-surname" type="text" placeholder="Doe">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Date of birth</label>
+              <input id="su-in-dob" type="date">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>NID</label>
+              <input id="su-in-nid" type="text" placeholder="1234567890">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Passport</label>
+              <input id="su-in-passport" type="text" placeholder="A1234567">
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+            <button class="btn btn-primary" onclick="addSignupForm()">+ Add to Queue</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearSignupForm()">Clear</button>
+            <span style="flex:1;"></span>
+            <label style="color:var(--muted); font-size:12px;">Start at
+              <select id="signup-global-step" style="font-size:12px;">
+                <option value="">Auto (resume)</option>
+                <option value="1">1: Mobile check</option>
+                <option value="2">2: Mobile OTP verify</option>
+                <option value="3">3: Email check</option>
+                <option value="4">4: Email OTP verify</option>
+                <option value="5">5: Sign up</option>
+              </select>
+            </label>
+            <label style="color:var(--muted); font-size:12px;">OTP wait (s)
+              <input id="signup-otp-timeout" type="number" value="300" min="30" style="width:80px;">
+            </label>
+            <button id="signup-start-all" class="btn btn-success" onclick="startAllSignups()">▶ Start All</button>
+            <button id="signup-stop-all" class="btn btn-danger" onclick="stopAllSignups()">⏹ Stop All</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Signup Queue</h2>
+            <button class="btn btn-ghost btn-sm" onclick="loadSignups()">↺ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Last log</th>
+                  <th style="width:1%; white-space:nowrap;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="signups-table">
+                <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cipher Keys -->
+    <div id="tab-cipher" class="tab-content">
+      <div class="gap-4">
+
+        <!-- Cipher Status -->
+        <div class="card">
+          <div class="section-header">
+            <h2>Cipher Key Status</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <span id="cipher-autopull-status" style="font-size:11px; color:var(--accent2); display:none;"></span>
+              <span id="cipher-pulled-at" style="font-size:11px; color:var(--muted)"></span>
+              <button class="btn btn-primary btn-sm" id="btn-cipher-pull" onclick="pullCipherKeys()">🔄 Pull Latest Keys</button>
+              <label style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:4px;" title="Gap between auto-pull attempts, in milliseconds. Lower = grabs new keys sooner but polls harder.">
+                Interval
+                <input type="number" id="cipher-autopull-interval" value="1000" min="0" step="250" style="width:70px; padding:2px 4px; font-size:11px;">ms
+              </label>
+              <label style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:4px;" title="Number of parallel workers. Each retries the pull independently through a random proxy; the first to succeed wins and the rest stop. Needs active proxies (falls back to 1 direct worker if none).">
+                Workers
+                <input type="number" id="cipher-autopull-workers" value="5" min="1" max="20" step="1" style="width:56px; padding:2px 4px; font-size:11px;">
+              </label>
+              <button class="btn btn-primary btn-sm" id="btn-cipher-autopull" onclick="startCipherAutoPull()">♻️ Auto Pull</button>
+              <button class="btn btn-danger btn-sm" id="btn-cipher-autopull-stop" onclick="stopCipherAutoPull()" style="display:none;">⏹ Stop Auto Pull</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadCipherStatus()">↺ Refresh</button>
+            </div>
+          </div>
+          <div id="cipher-status-content" style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="color:var(--muted); font-size:13px; padding:20px; grid-column: span 2; text-align:center;">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Pull Log -->
+        <div class="card" id="cipher-pull-log-card" style="display:none;">
+          <div class="card-title">Pull Progress</div>
+          <div id="cipher-pull-log" style="font-family:'JetBrains Mono',monospace; font-size:11px; max-height:200px; overflow-y:auto; padding:8px; background:var(--bg1); border-radius:6px; border:1px solid var(--border);"></div>
+        </div>
+
+        <!-- Endpoint Auto-Adjust (Bundle Probe) -->
+        <div class="card">
+          <div class="section-header">
+            <h2>Endpoint Auto-Adjust</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <span id="probe-applied-at" style="font-size:11px; color:var(--muted)"></span>
+              <button class="btn btn-primary btn-sm" id="btn-probe-auto" onclick="runProbe('auto')" title="Runs the site bundle offline (network faked) and walks all steps hands-free, then updates the endpoint/header config. No login or slot needed.">🧭 Run Probe (auto)</button>
+              <button class="btn btn-ghost btn-sm" id="btn-probe-attended" onclick="runProbe('attended')" title="Opens a browser you drive — sign in, solve the captcha, upload, reserve, pay. Captures your real requests and applies them when you close the window.">🖐️ Probe — I'll drive</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadProbeStatus()">↺ Refresh</button>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">
+            Learns this week's real request URLs, rotating paths (e.g. <code>v23</code>), and the
+            <code>x-sec-*</code> / <code>x-token</code> / <code>x-v-request-meta</code> headers straight off the running
+            bundle, then merges them into the endpoint config the bot runs on — so a frontend change auto-adjusts.
+          </div>
+          <div id="probe-status-content" style="font-size:12px; color:var(--muted);">Loading…</div>
+          <div id="probe-log-card" style="display:none; margin-top:12px;">
+            <div class="card-title">Probe Progress</div>
+            <div id="probe-log" style="font-family:'JetBrains Mono',monospace; font-size:11px; max-height:220px; overflow-y:auto; padding:8px; background:var(--bg1); border-radius:6px; border:1px solid var(--border);"></div>
+          </div>
+        </div>
+
+        <!-- Captcha Token Tester -->
+        <div class="card">
+          <div class="card-title">🧪 Captcha Token Tester</div>
+          <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group" style="flex:1;">
+              <label>Flow</label>
+              <select id="cipher-test-flow">
+                <option value="signin">Sign In</option>
+                <option value="reserve">Reserve Slot</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:4;">
+              <label>Captcha Token (paste raw token here)</label>
+              <input id="cipher-test-input" type="text" placeholder="0.AbCdEf1234..." style="font-family:'JetBrains Mono',monospace; font-size:11px;">
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-primary btn-sm" onclick="testCipherEncrypt()">🔒 Encrypt</button>
+              <button class="btn btn-ghost btn-sm" onclick="testCipherDecrypt()">🔓 Decrypt</button>
+            </div>
+          </div>
+          <div id="cipher-test-result" style="display:none; margin-top:12px;">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">Result:</div>
+            <div id="cipher-test-output" style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:10px; background:var(--bg1); border-radius:6px; border:1px solid var(--border); word-break:break-all;"></div>
+            <div id="cipher-test-params" style="font-size:10px; color:var(--muted); margin-top:6px;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="tab-settings" class="tab-content">
+      <div class="gap-4">
+        <div class="card">
+          <div class="section-header">
+            <h2>Endpoint & Captcha Configuration</h2>
+            <button class="btn btn-primary btn-sm" onclick="saveEndpointConfig()">💾 Save Changes</button>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+
+            <!-- Sign In -->
+            <div style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;">
+              <div style="font-weight:600; margin-bottom: 8px; color:var(--accent2)">Sign In (v1/auth/signin)</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Base URL</label>
+                <input id="cfg-ep_signin_url" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Captcha Type</label>
+                <select id="cfg-ep_signin_captchaType" onchange="autoFillSiteKey('signin', this.value)">
+                  <option value="TurnstileTask">Cloudflare Turnstile</option>
+                  <option value="RecaptchaV2Task">Google reCAPTCHA v2</option>
+                  <option value="RecaptchaV3TaskProxyless">Google reCAPTCHA v3</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Site Key</label>
+                <input id="cfg-ep_signin_siteKey" type="text" style="font-family:monospace; font-size:11px;">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Encode Token?</label>
+                <select id="cfg-ep_signin_encode">
+                  <option value="0">No (Raw string)</option>
+                  <option value="1">Yes (Encode)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Concurrent IP Count</label>
+                <input id="cfg-ep_signin_ip_count" type="number" min="1" max="50">
+              </div>
+            </div>
+
+            <!-- Reserve Slot -->
+            <div style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;">
+              <div style="font-weight:600; margin-bottom: 8px; color:var(--accent2)">Reserve Slot</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Base URL</label>
+                <input id="cfg-ep_reserve_url" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Captcha Type</label>
+                <select id="cfg-ep_reserve_captchaType" onchange="autoFillSiteKey('reserve', this.value)">
+                  <option value="TurnstileTask">Cloudflare Turnstile</option>
+                  <option value="RecaptchaV2Task">Google reCAPTCHA v2</option>
+                  <option value="RecaptchaV3TaskProxyless">Google reCAPTCHA v3</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Site Key</label>
+                <input id="cfg-ep_reserve_siteKey" type="text" style="font-family:monospace; font-size:11px;">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Encode Token?</label>
+                <select id="cfg-ep_reserve_encode">
+                  <option value="0">No (Raw string)</option>
+                  <option value="1">Yes (Encode)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Concurrent IP Count</label>
+                <input id="cfg-ep_reserve_ip_count" type="number" min="1" max="50">
+              </div>
+            </div>
+
+            <!-- File Upload -->
+            <div style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;">
+              <div style="font-weight:600; margin-bottom: 8px; color:var(--accent2)">File Upload</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Base URL</label>
+                <input id="cfg-ep_fileupload_url" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Captcha Type <span style="font-weight:400; opacity:.7">(x-token)</span></label>
+                <select id="cfg-ep_fileupload_captchaType" onchange="autoFillSiteKey('fileupload', this.value)">
+                  <option value="TurnstileTask">Cloudflare Turnstile</option>
+                  <option value="RecaptchaV2Task">Google reCAPTCHA v2</option>
+                  <option value="RecaptchaV3TaskProxyless">Google reCAPTCHA v3</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Site Key</label>
+                <input id="cfg-ep_fileupload_siteKey" type="text" style="font-family:monospace; font-size:11px;">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Concurrent IP Count</label>
+                <input id="cfg-ep_fileupload_ip_count" type="number" min="1" max="50">
+              </div>
+            </div>
+
+            <!-- Misc Endpoints -->
+            <div style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;">
+              <div style="font-weight:600; margin-bottom: 8px; color:var(--accent2)">Other API Endpoints</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Verify OTP Base URL</label>
+                <input id="cfg-ep_verifyotp_url" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Verify OTP IP Count</label>
+                <input id="cfg-ep_verifyotp_ip_count" type="number" min="1" max="50">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Payment Init Base URL</label>
+                <input id="cfg-ep_payment_url" type="text">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Payment Captcha Type</label>
+                <select id="cfg-ep_payment_captchaType" onchange="autoFillSiteKey('payment', this.value)">
+                  <option value="TurnstileTask">Cloudflare Turnstile</option>
+                  <option value="RecaptchaV2Task">Google reCAPTCHA v2</option>
+                  <option value="RecaptchaV3TaskProxyless">Google reCAPTCHA v3</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Payment Site Key <span style="font-weight:400; opacity:.7">(blank = no captcha)</span></label>
+                <input id="cfg-ep_payment_siteKey" type="text" style="font-family:monospace; font-size:11px;">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Payment Init IP Count</label>
+                <input id="cfg-ep_payment_ip_count" type="number" min="1" max="50">
+              </div>
+            </div>
+
+            <!-- General Features -->
+            <div style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;">
+              <div style="font-weight:600; margin-bottom: 8px; color:var(--accent2)">General Features</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Primary Captcha Provider URL</label>
+                <input id="cfg-primary_captcha_url" type="text"
+                  placeholder="e.g. http://103.177.124.172:3007/token?api_key=...">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>CapMonster API Key</label>
+                <div style="display:flex; gap:8px;">
+                  <input id="cfg-capmonster_key" type="text" placeholder="Enter API Key...">
+                  <button id="btn-capmonster-balance" class="btn btn-info btn-sm" onclick="checkCapMonsterBalance()" style="white-space:nowrap;">💰 Balance</button>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Enable 401 Auto Sign</label>
+                <select id="cfg-enable_401_auto">
+                  <option value="1">Yes (Enabled)</option>
+                  <option value="0">No (Disabled)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>API Request Timeout (seconds)</label>
+                <input id="cfg-api_timeout" type="number" min="5" max="120" placeholder="30">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>Solver Proxy (🧩 Open Solver)</label>
+                <input id="cfg-solver_proxy" type="text"
+                  placeholder="user:pass@host:port  ·  leave blank for proxyless">
+                <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+                  Used by the Open Solver browser. Formats: host:port, host:port:user:pass, user:pass@host:port, or socks5://… Leave blank to run without a proxy.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Add OTP Server</div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">
+            Every account connects to <b>all active</b> OTP servers simultaneously. Enter a domain (e.g. <code>otps.top</code>) or a full <code>wss://…</code> link.
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input id="new-otp-server" type="text" placeholder="e.g. otps.top  or  wss://otps.top/">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" onclick="addOtpServer()">+ Add Server</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>OTP Servers</h2>
+            <button class="btn btn-ghost btn-sm" onclick="loadOtpServers()">↺ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Server URL</th>
+                  <th>Status</th>
+                  <th>Added On</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="otp-servers-table">
+                <tr>
+                  <td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Proxy Modal -->
+  <div id="proxy-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-title">🌐 Proxies — <span id="proxy-modal-phone"></span></div>
+      <div id="proxy-list" style="margin-bottom:14px;min-height:36px;"></div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Add Proxies (one per line:
+          ip:port:user:pass)</label>
+        <textarea id="proxy-bulk-input" placeholder="160.191.80.163:9001:user:pass"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeProxyModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveBulkProxies()">+ Add Proxies</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Files Modal -->
+  <div id="files-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-title">📎 Documents — <span id="files-modal-phone"></span></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        PDF only, max 10&nbsp;MB each. Uploaded in order — the first file is the primary applicant.
+        These are auto-uploaded after OTP verify, before Reserve (when Auto File Upload is On).
+      </div>
+      <div id="files-list" style="margin-bottom:14px;min-height:36px;"></div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Add PDF(s)</label>
+        <input id="files-input" type="file" accept="application/pdf,.pdf" multiple>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeFilesModal()">Close</button>
+        <button class="btn btn-warn" onclick="resetAccountUploads()" title="Clear the uploaded flags so all files re-upload on the next run">↺ Reset uploads</button>
+        <button class="btn btn-primary" onclick="uploadAccountFiles()">⬆️ Upload</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Account Modal -->
+  <div id="edit-modal" class="modal-overlay">
+    <div class="modal" style="width:400px;">
+      <div class="modal-title">✏️ Edit Account</div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Name</label>
+        <input id="edit-name" type="text">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Phone</label>
+        <input id="edit-phone" type="text">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Email</label>
+        <input id="edit-email" type="email">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Password</label>
+        <input id="edit-password" type="text">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Assigned IP</label>
+        <select id="edit-assigned-ip">
+          <option value="">Default (api.ivacbd.com)</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditAccount()">💾 Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signup Edit Modal -->
+  <div id="signup-edit-modal" class="modal-overlay">
+    <div class="modal" style="width:440px;">
+      <div class="modal-title">✏️ Edit Signup</div>
+      <input id="su-edit-id" type="hidden">
+      <p id="su-edit-note" style="color:var(--muted); font-size:11px; margin:0 0 10px;"></p>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Email <span style="color:#e74c3c;">*</span></label>
+          <input id="su-edit-email" type="email">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Phone <span style="color:#e74c3c;">*</span></label>
+          <input id="su-edit-phone" type="text">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Password <span style="color:#e74c3c;">*</span></label>
+          <input id="su-edit-password" type="text">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Date of birth</label>
+          <input id="su-edit-dob" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>Given name</label>
+          <input id="su-edit-given" type="text">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Surname</label>
+          <input id="su-edit-surname" type="text">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>NID</label>
+          <input id="su-edit-nid" type="text">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Passport</label>
+          <input id="su-edit-passport" type="text">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeSignupEdit()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSignupEdit()">💾 Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <script>
+    const socket = io();
+    let currentProxyAccountId = null;
+    let accounts = [];
+    let countdownInterval = null;
+    let autoTargetTs = null;
+    const accountProtocols = {}; // phone -> last negotiated protocol (h1/h2/h3)
+
+    // Map a wire protocol token to a dashboard badge [label, color].
+    function protocolBadge(protocol) {
+      const map = {
+        'h3': ['HTTP/3', '#16a34a'], 'http/3': ['HTTP/3', '#16a34a'],
+        'h2': ['HTTP/2', '#2563eb'], 'http/2': ['HTTP/2', '#2563eb'],
+        'h1': ['HTTP/1.1', '#6b7280'], 'http/1.1': ['HTTP/1.1', '#6b7280']
+      };
+      const key = String(protocol || '').toLowerCase();
+      return map[key] || [protocol, '#6b7280'];
+    }
+
+    // Documents uploaded TODAY / total stored for the account. Files re-upload each day, so the
+    // count resets daily — green once every stored file is in, amber while partial, grey when the
+    // account has no PDFs attached yet (nothing to upload).
+    function filesBadge(a) {
+      const total = Number(a.files_total || 0);
+      const done = Number(a.files_uploaded || 0);
+      if (!total) return ['📎 no files', '#6b7280', 'No PDFs attached to this account yet'];
+      const color = done >= total ? '#16a34a' : (done > 0 ? '#d97706' : '#6b7280');
+      return [`📎 ${done}/${total}`, color, `${done} of ${total} document(s) uploaded today`];
+    }
+
+    const STEPS = ['Sign In', 'Verify OTP', 'File Upload', 'Reserve Slot', 'Payment Init'];
+
+    let runningPhones = [];
+    // ─── Socket Events ────────────────────────────────────────────────────────
+    socket.on('bot_state', ({ running, autoStart }) => {
+      runningPhones = running || [];
+      updateGlobalStatus(runningPhones);
+      document.getElementById('btn-cancel-auto').disabled = !autoStart;
+
+      // Update individual start/stop buttons based on actual worker status
+      accounts.forEach(a => {
+        const isRunning = runningPhones.includes(a.phone);
+        const startBtn = document.getElementById(`btn-start-${a.phone}`);
+        const stopBtn = document.getElementById(`btn-stop-${a.phone}`);
+        if (startBtn) startBtn.disabled = (isRunning || a.is_active === 0);
+        // Keep individual stop button always enabled
+        if (stopBtn) stopBtn.disabled = false;
+      });
+    });
+
+    socket.on('account_log', ({ phone, level, message, time }) => {
+      appendLog(phone, level, message, time);
+    });
+
+    socket.on('account_status', ({ phone, status, step }) => {
+      const badge = document.getElementById(`status-${phone}`);
+      if (badge) { badge.className = `account-status status-${status}`; badge.textContent = status; }
+
+      // Auto-update step dropdown if bot advanced
+      if (step !== undefined) {
+        const sel = document.getElementById(`step-sel-${phone}`);
+        if (sel) sel.value = step;
+      }
+
+      const account = accounts.find(a => a.phone === phone);
+      if (account) account.status = status;
+      loadAccounts();
+    });
+
+    socket.on('account_protocol', ({ phone, protocol }) => {
+      accountProtocols[phone] = protocol;
+      const el = document.getElementById(`proto-${phone}`);
+      if (!el) return;
+      const [label, color] = protocolBadge(protocol);
+      el.textContent = '🔗 ' + label;
+      el.style.color = color;
+      el.style.display = '';
+    });
+
+    socket.on('token_updated', ({ phone, token_expires_at }) => {
+      const account = accounts.find(a => a.phone === phone);
+      if (account) {
+        account.token_expires_at = token_expires_at;
+        updateTokenTimerUI(account);
+      }
+    });
+
+    socket.on('auto_open_browser', ({ accountId }) => {
+      const account = accounts.find(a => a.id === accountId);
+      if (account) openBrowser(accountId, account.phone);
+    });
+
+    socket.on('token_cleared', ({ phone }) => {
+      const account = accounts.find(a => a.phone === phone);
+      if (account) {
+        account.token_expires_at = null;
+      }
+      const timerEl = document.getElementById(`timer-${phone}`);
+      if (timerEl) timerEl.classList.remove('active');
+    });
+
+    socket.on('account_updated', (account) => {
+      const index = accounts.findIndex(a => a.id === account.id);
+      if (index !== -1) {
+        accounts[index] = account;
+        const toggle = document.getElementById(`toggle-${account.phone}`);
+        if (toggle) toggle.checked = (account.is_active === 1);
+      }
+    });
+
+    socket.on('server_message', ({ type, text }) => {
+      toast(text, type);
+    });
+
+    socket.on('callback_log', ({ id, message, isError }) => {
+      const logEl = document.getElementById(`callback-log-${id}`);
+      if (logEl) {
+        logEl.innerHTML = `<div style="color: ${isError ? 'var(--danger)' : 'var(--success)'}; margin-bottom: 2px;">${escapeHtml(message)}</div>` + logEl.innerHTML;
+        // prevent it from growing too large
+        if (logEl.children.length > 50) {
+          logEl.removeChild(logEl.lastChild);
+        }
+      }
+    });
+
+    socket.on('payment_link', ({ phone, name, url }) => {
+      toast(`Payment link opened securely for ${name || phone}`, 'success');
+
+      // Mark the link as 'clicked' in the log panel visually
+      // setTimeout(() => {
+      //   const logPanel = document.getElementById(`log-${phone}`);
+      //   if (logPanel) {
+      //     const links = logPanel.querySelectorAll('a');
+      //     // Start from the most recent link
+      //     for (let i = links.length - 1; i >= 0; i--) {
+      //       if (links[i].href === url && !links[i].classList.contains('auto-clicked')) {
+      //         links[i].classList.add('auto-clicked');
+      //         links[i].style.color = '#a78bfa';
+      //         links[i].style.textDecorationStyle = 'dashed';
+      //         links[i].innerHTML += ' <span style="font-size:10px; color:var(--success); font-weight:600; font-family:\'Inter\', sans-serif;">(Auto-Opened 🚀)</span>';
+      //         break;
+      //       }
+      //     }
+      //   }
+      // }, 300); // Small delay to ensure the log has rendered in the DOM
+    });
+
+    let serverTimeOffset = 0;
+    socket.on('server_time', (serverTs) => {
+      // Calculate offset between local browser time and server time
+      // We do this to smoothly update the clock without waiting for the next socket packet
+      const localTs = Date.now();
+      serverTimeOffset = serverTs - localTs;
+    });
+
+    // Run the high-freq clock updater
+    setInterval(() => {
+      if (!serverTimeOffset) return; // Wait for initial sync
+      const currentServerTime = Date.now() + serverTimeOffset;
+      const d = new Date(currentServerTime);
+      const h = pad(d.getHours());
+      const m = pad(d.getMinutes());
+      const s = pad(d.getSeconds());
+      const ms = String(d.getMilliseconds()).padStart(3, '0');
+      const clockEl = document.getElementById('server-clock');
+      if (clockEl) clockEl.innerHTML = `🕒 ${h}:${m}:${s}.<span style="font-size:10px;opacity:0.8">${ms}</span>`;
+    }, 47); // Update ~21fps
+
+    // ─── Tabs ─────────────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        if (tab.dataset.tab === 'accounts') loadAccounts();
+        if (tab.dataset.tab === 'proxies') loadProxies();
+        if (tab.dataset.tab === 'cipher') { loadCipherStatus(); loadProbeStatus(); }
+        if (tab.dataset.tab === 'signup') loadSignups();
+      });
+    });
+
+    // ─── Bot Control — All ────────────────────────────────────────────────────
+    async function startAll() {
+      const otpTimeout = document.getElementById('otp-request-timeout').value.trim();
+      const body = { steps: {} };
+      if (otpTimeout) body.otpTimeout = parseInt(otpTimeout);
+
+      accounts.forEach(a => {
+        const stepEl = document.getElementById(`step-sel-${a.phone}`);
+        if (stepEl) body.steps[a.phone] = parseInt(stepEl.value);
+      });
+
+      const res = await api('/api/bot/start', 'POST', body);
+      toast(res.success ? `▶ Started ${res.accounts} workers` : (res.message || res.error), res.success ? 'success' : 'error');
+    }
+
+    async function stopAll() {
+      await api('/api/bot/stop', 'POST');
+      toast('⏹ Stopping all workers...', 'warn');
+    }
+
+    function updateGlobalStatus(runningPhones) {
+      const badge = document.getElementById('status-badge');
+      const text = document.getElementById('status-text');
+      const isRunning = runningPhones.length > 0;
+      badge.className = 'status-badge ' + (isRunning ? 'running' : 'idle');
+      text.textContent = isRunning ? `Running (${runningPhones.length})` : 'Idle';
+      document.getElementById('btn-start').disabled = isRunning;
+      document.getElementById('btn-stop').disabled = !isRunning;
+    }
+
+    // ─── Individual Account Start/Stop ────────────────────────────────────────
+    async function startAccount(id, phone) {
+      const stepEl = document.getElementById(`step-sel-${phone}`);
+      const step = stepEl ? parseInt(stepEl.value) : 0;
+      const otpTimeout = document.getElementById('otp-request-timeout').value.trim();
+      const body = { step };
+      if (otpTimeout) body.otpTimeout = parseInt(otpTimeout);
+      const res = await api(`/api/accounts/${id}/start`, 'POST', body);
+      toast(res.success ? `▶ Started ${phone} from step ${step}` : res.error, res.success ? 'success' : 'error');
+    }
+
+    async function stopAccount(id, phone) {
+      const res = await api(`/api/accounts/${id}/stop`, 'POST');
+      toast(res.success ? `⏹ Stopped ${phone}` : res.error, res.success ? 'warn' : 'error');
+    }
+
+    // ─── Auto-start ───────────────────────────────────────────────────────────
+    async function setAutoStart() {
+      const time = document.getElementById('autostart-time').value.trim();
+      const warmTime = document.getElementById('captcha-warm-time').value.trim();
+      const otpTimeout = document.getElementById('otp-request-timeout').value.trim();
+      const offsetMs = document.getElementById('autostart-offset').value.trim();
+      if (!time) return toast('Enter a start time', 'error');
+
+      const body = { time, steps: {} };
+      if (warmTime) body.captchaWarmTime = warmTime;
+      if (otpTimeout) body.otpTimeout = parseInt(otpTimeout);
+      if (offsetMs) body.offsetMs = parseInt(offsetMs);
+
+      accounts.forEach(a => {
+        const stepEl = document.getElementById(`step-sel-${a.phone}`);
+        if (stepEl) body.steps[a.phone] = parseInt(stepEl.value);
+      });
+
+      const res = await api('/api/bot/autostart', 'POST', body);
+      if (!res.success) return toast(res.error, 'error');
+      autoTargetTs = new Date(res.target).getTime();
+      startCountdown();
+      document.getElementById('btn-cancel-auto').disabled = false;
+      toast(`⏰ Auto-start set — ${Math.round(res.startsIn)}s from now`, 'success');
+    }
+
+    async function cancelAutoStart() {
+      await api('/api/bot/autostart/cancel', 'POST');
+      stopCountdown();
+      toast('Auto-start cancelled', 'warn');
+      document.getElementById('btn-cancel-auto').disabled = true;
+    }
+
+    function startCountdown() {
+      stopCountdown();
+      const el = document.getElementById('countdown');
+      el.classList.remove('inactive');
+      countdownInterval = setInterval(() => {
+        const remaining = autoTargetTs - Date.now();
+        if (remaining <= 0) { stopCountdown(); el.textContent = 'Starting...'; return; }
+        const s = Math.floor(remaining / 1000);
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        el.textContent = `${pad(h)}:${pad(m)}:${pad(sec)}`;
+      }, 500);
+    }
+
+    function stopCountdown() {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+      const el = document.getElementById('countdown');
+      el.classList.add('inactive');
+      el.textContent = 'Not set';
+    }
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    // ─── Captcha Pool ─────────────────────────────────────────────────────────
+    async function fillCaptchaPool() {
+      await api('/api/captcha/fill', 'POST');
+      toast('🔐 Filling captcha pool...', 'success');
+      refreshCaptchaCount();
+    }
+
+    async function refreshCaptchaCount() {
+      try {
+        const s = await api('/api/captcha/status');
+        document.getElementById('captcha-count').textContent = `${s.pool + s.filling}/${s.max}`;
+      } catch (e) { }
+    }
+    setInterval(refreshCaptchaCount, 3000);
+
+    // ─── Dashboard Log Panels ─────────────────────────────────────────────────
+    async function renderDashboard() {
+      accounts = await api('/api/accounts');
+      const grid = document.getElementById('accounts-grid');
+      if (!accounts.length) {
+        grid.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:40px;grid-column:1/-1">No accounts yet. Add them in <strong>Accounts & Proxies</strong>.</div>`;
+        return;
+      }
+      grid.innerHTML = accounts.map(a => {
+        const isRunning = runningPhones.includes(a.phone);
+        return `
+    <div class="account-card" style="opacity: ${a.is_active === 1 ? '1' : '0.6'}">
+      <div class="account-card-header">
+        <span class="account-phone">
+            <label class="toggle-switch" style="vertical-align: middle; margin-right: 6px;">
+              <input type="checkbox" id="toggle-${a.phone}" ${a.is_active === 1 ? 'checked' : ''} onchange="toggleAccount(${a.id}, this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+            ${a.name ? `${escapeHtml(a.name)} <span style="color:var(--muted);font-weight:400;font-size:11px">(${escapeHtml(a.phone)})</span>` : escapeHtml(a.phone)}
+        </span>
+        <div style="display:flex; gap: 8px; align-items:center;">
+           <span id="timer-${a.phone}" class="token-timer">⏱ --:--</span>
+           <span id="proto-${a.phone}" class="proto-badge" title="Connection protocol to server" style="font-size:11px;font-weight:600;${accountProtocols[a.phone] ? `color:${protocolBadge(accountProtocols[a.phone])[1]}` : 'display:none'}">${accountProtocols[a.phone] ? '🔗 ' + protocolBadge(accountProtocols[a.phone])[0] : ''}</span>
+           <span id="files-${a.phone}" class="proto-badge" title="${filesBadge(a)[2]}" style="font-size:11px;font-weight:600;color:${filesBadge(a)[1]}">${filesBadge(a)[0]}</span>
+           <span id="status-${a.phone}" class="account-status status-${a.status}">${a.status}</span>
+        </div>
+      </div>
+      <div class="account-card-controls">
+        <select id="step-sel-${a.phone}" class="step-select" title="Start from step">
+          ${STEPS.map((s, i) => `<option value="${i}">${i}: ${s}</option>`).join('')}
+        </select>
+        <button id="btn-start-${a.phone}" class="btn btn-success btn-sm" onclick="startAccount(${a.id}, '${a.phone}')" ${isRunning || a.is_active === 0 ? 'disabled' : ''}>▶ Start</button>
+        <button id="btn-stop-${a.phone}"  class="btn btn-danger btn-sm"  onclick="stopAccount(${a.id}, '${a.phone}')">⏹ Stop</button>
+        <button id="btn-check-proxy-${a.phone}" class="btn btn-ghost btn-sm" onclick="checkProxy(${a.id}, '${a.phone}')" style="margin-left:4px;" title="Check proxy connectivity">🌐 CP</button>
+        
+        <div style="display:flex; gap: 4px;">
+          <input id="manual-otp-${a.phone}" type="text" placeholder="OTP" style="width: 70px; font-size: 11px; padding: 2px 4px;">
+          <button class="btn btn-warn btn-sm" onclick="submitManualOtp('${a.phone}')">✍️ Submit</button>
+        </div>
+        <button class="btn btn-warn btn-sm" onclick="jumpStep(${a.id}, '${a.phone}', 3)" style="margin-left:4px;" title="Skip OTP and reserve a slot now">🎯 Reserve</button>
+        <button class="btn btn-success btn-sm" onclick="jumpStep(${a.id}, '${a.phone}', 4)" title="Skip straight to Payment Init">💳 Pay</button>
+        <button class="btn btn-info btn-sm" onclick="pullBookingConfig(${a.id}, '${a.phone}')" style="margin-left:4px;" title="Pull Booking Config (Appointment ID)">📥 Pull</button>
+        <div style="display:flex; gap: 4px; margin-left:4px;">
+          <input id="appt-id-${a.phone}" type="text" placeholder="Appointment ID" value="${a.appointment_id ? a.appointment_id : ''}" title="${a.appointment_id ? `Saved ${a.appointment_id} on ${a.appointment_date || '?'} (valid for that day only)` : 'Not set'}" style="width: 120px; font-size: 11px; padding: 2px 4px;">
+          <button class="btn btn-info btn-sm" onclick="setAppointmentId(${a.id}, '${a.phone}')" title="Save this Appointment ID for today (expires next day)">💾 Set</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openBrowser(${a.id}, '${a.phone}')" style="margin-left:4px;" title="Open Browser with injected Local Storage">🌐 Browser</button>
+        <button id="btn-invoice-${a.phone}" class="btn btn-info btn-sm" onclick="downloadInvoice(${a.id}, '${a.phone}')" style="margin-left:4px;" title="Fetch this account's invoices from IVAC and download the PDF(s)">🧾 Invoice</button>
+        <button id="btn-overview-${a.phone}" class="btn btn-ghost btn-sm" onclick="fetchOverview(${a.id}, '${a.phone}')" style="margin-left:4px;" title="Fetch overview and print the BGD number to this account's log">👁️ Overview</button>
+
+        <button class="btn btn-ghost btn-sm" onclick="clearLog(${a.id}, '${a.phone}')" style="margin-left:8px;">🗑</button>
+      </div>
+      <div id="log-${a.phone}" class="log-panel"><div class="log-empty">Waiting for logs...</div></div>
+    </div>
+  `}).join('');
+      accounts.forEach(a => {
+        updateTokenTimerUI(a);
+      });
+    }
+
+    async function toggleAccount(id, isActive) {
+      const res = await api(`/api/accounts/${id}/toggle`, 'POST', { isActive: isActive ? 1 : 0 });
+      if (res.error) toast(res.error, 'error');
+      else toast(`Account ${isActive ? 'Enabled' : 'Disabled'}`, isActive ? 'success' : 'warn');
+      renderDashboard();
+    }
+
+    function updateTokenTimerUI(account) {
+      const timerEl = document.getElementById(`timer-${account.phone}`);
+      if (!timerEl) return;
+
+      if (!account.token_expires_at) {
+        timerEl.classList.remove('active');
+        return;
+      }
+
+      const expires = new Date(account.token_expires_at).getTime();
+      const now = Date.now();
+      const diff = Math.floor((expires - now) / 1000);
+
+      if (diff > 0) {
+        timerEl.classList.add('active');
+        const m = Math.floor(diff / 60);
+        const s = diff % 60;
+        timerEl.innerHTML = `⏱ ${pad(m)}:${pad(s)}`;
+        if (diff < 120) timerEl.style.color = 'var(--danger)';
+        else timerEl.style.color = 'var(--success)';
+      } else {
+        timerEl.classList.remove('active');
+      }
+    }
+
+    setInterval(() => {
+      if (accounts && accounts.length) {
+        accounts.forEach(a => {
+          updateTokenTimerUI(a);
+        });
+      }
+    }, 1000);
+
+    // Keep the 📎 uploaded/total badge live while a run is in progress. A full renderDashboard()
+    // would rebuild grid.innerHTML and wipe every card's log panel, so patch the badge spans in
+    // place instead and keep the cached `accounts` rows in sync for the next real render.
+    setInterval(async () => {
+      if (!accounts || !accounts.length) return;
+      try {
+        const fresh = await api('/api/accounts');
+        if (!Array.isArray(fresh)) return;
+        fresh.forEach(a => {
+          const cached = accounts.find(x => x.phone === a.phone);
+          if (cached) { cached.files_total = a.files_total; cached.files_uploaded = a.files_uploaded; }
+          const el = document.getElementById(`files-${a.phone}`);
+          if (!el) return;
+          const [text, color, title] = filesBadge(a);
+          el.textContent = text;
+          el.style.color = color;
+          el.title = title;
+        });
+      } catch (e) { /* transient — next tick retries */ }
+    }, 5000);
+
+    function appendLog(phone, level, message, time) {
+      const panel = document.getElementById(`log-${phone}`);
+      if (!panel) return;
+      const empty = panel.querySelector('.log-empty');
+      if (empty) empty.remove();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const t = time ? new Date(time).toLocaleTimeString() : new Date().toLocaleTimeString();
+      let safeMessage = escapeHtml(message);
+      safeMessage = safeMessage.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+      entry.innerHTML = `<span class="log-time">[${t}]</span><span class="log-${level}">${safeMessage}</span>`;
+      panel.appendChild(entry);
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    async function checkProxy(id, phone) {
+      appendLog(phone, 'INFO', `🌐 Checking proxy connectivity...`);
+      const btn = document.getElementById(`btn-check-proxy-${phone}`);
+      if (btn) btn.disabled = true;
+      try {
+        const res = await api(`/api/accounts/${id}/check-proxy`, 'POST');
+        if (res.success) {
+          appendLog(phone, 'INFO', `✅ Proxy working! IP: ${res.ip} || Ping: ${res.time}ms || Type: ${res.type} || Protocol: ${res.protocol}`);
+          toast(`Proxy check passed`, 'success');
+        } else {
+          appendLog(phone, 'ERROR', `❌ Proxy failed: ${res.error}`);
+          toast(`Proxy check failed`, 'error');
+        }
+      } catch (err) {
+        appendLog(phone, 'ERROR', `❌ Proxy error: ${err.message}`);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function clearLog(id, phone) {
+      const p = document.getElementById(`log-${phone}`);
+      if (p) p.innerHTML = '<div class="log-empty">Cleared</div>';
+      await api(`/api/accounts/${id}/logs`, 'DELETE');
+    }
+
+    async function clearAllLogs() {
+      document.querySelectorAll('.log-panel').forEach(p => { p.innerHTML = '<div class="log-empty">Cleared</div>'; });
+      for (const a of accounts) {
+        await api(`/api/accounts/${a.id}/logs`, 'DELETE');
+      }
+    }
+
+    // ─── Accounts Table ───────────────────────────────────────────────────────
+    function changeGlobalStep() {
+      const val = document.getElementById('global-step-select').value;
+      if (!val) return;
+      document.querySelectorAll('.step-select:not(#global-step-select)').forEach(sel => {
+        sel.value = val;
+      });
+      toast(`All accounts set to step ${val}`, 'info');
+      document.getElementById('global-step-select').value = '';
+    }
+
+    async function loadAccounts() {
+      accounts = await api('/api/accounts');
+      const tbody = document.getElementById('accounts-table');
+
+      if (!accounts.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No accounts</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = accounts.map(a => `
+    <tr>
+      <td style="font-weight:600;">${a.name || '<span style="color:var(--muted);font-size:11px;font-weight:400;">—</span>'}</td>
+      <td class="mono">${a.phone}</td>
+      <td class="mono" >${escapeHtml(a.password || '—')}</td>
+      <td>
+        <span class="account-status status-${a.status}">${a.status}</span>
+        ${a.is_active === 0 ? '<span style="color:var(--danger);font-size:10px;margin-left:4px;">(DISABLED)</span>' : ''}
+      </td>
+      <td style="color:var(--muted);font-size:12px;">${a.last_run ? new Date(a.last_run).toLocaleString() : '—'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="openProxyModal(${a.id},'${a.phone}')">🌐 Manage</button>
+        <button class="btn btn-ghost btn-sm" title="${filesBadge(a)[2]} — click to manage PDFs" onclick="openFilesModal(${a.id},'${a.phone}')">📎 Files <span style="color:${filesBadge(a)[1]};font-weight:600;">${a.files_total ? `${a.files_uploaded || 0}/${a.files_total}` : '0'}</span></button>
+      </td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" title="Edit Account" onclick="openEditModal(${a.id}, '${escapeHtml(a.phone)}', '${escapeHtml(a.name || '')}', '${escapeHtml(a.password || '')}', '${escapeHtml(a.email || '')}', '${escapeHtml(a.assigned_ip || '')}')">✏️</button>
+          <button class="btn btn-ghost btn-sm" title="Reset Status to IDLE" onclick="resetAccount(${a.id})">↺</button>
+          <button class="btn btn-danger btn-sm" title="Delete Account" onclick="deleteAccount(${a.id})">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+    }
+
+    async function addAccount() {
+      const name = document.getElementById('new-name').value.trim();
+      const phone = document.getElementById('new-phone').value.trim();
+      const password = document.getElementById('new-password').value.trim();
+      const email = document.getElementById('new-email').value.trim();
+      const assigned_ip = document.getElementById('new-assigned-ip').value.trim();
+      if (!phone || !password) return toast('Phone and password required', 'error');
+      const res = await api('/api/accounts', 'POST', { phone, password, name, email, assigned_ip });
+      if (res.error) return toast(res.error, 'error');
+      document.getElementById('new-name').value = '';
+      document.getElementById('new-phone').value = '';
+      document.getElementById('new-password').value = '';
+      document.getElementById('new-email').value = '';
+      document.getElementById('new-assigned-ip').value = '';
+      toast('Account added!', 'success');
+      loadAccounts(); renderDashboard();
+    }
+
+    async function deleteAccount(id) {
+      if (!confirm('Delete this account?')) return;
+      await api(`/api/accounts/${id}`, 'DELETE');
+      toast('Deleted', 'success');
+      loadAccounts(); renderDashboard();
+    }
+
+    async function resetAccount(id) {
+      await api(`/api/accounts/${id}/reset`, 'POST');
+      toast('Status reset to IDLE', 'success');
+      loadAccounts();
+    }
+
+    async function pullBookingConfig(id, phone) {
+      toast(`Pulling booking config for ${phone}...`, 'info');
+      const res = await api(`/api/accounts/${id}/pull-booking-config`, 'POST');
+      if (res.error) {
+        toast(`Failed to pull config: ${res.error}`, 'error');
+      } else {
+        toast(`Config pulled! ID: ${res.appointmentId}`, 'success');
+      }
+    }
+
+    async function setAppointmentId(id, phone) {
+      const el = document.getElementById(`appt-id-${phone}`);
+      const appointmentId = (el && el.value ? el.value : '').trim();
+      if (!appointmentId) { toast('Enter an Appointment ID first', 'warn'); return; }
+      const res = await api(`/api/accounts/${id}/set-appointment-id`, 'POST', { appointmentId });
+      if (res.error) {
+        toast(`Failed to set Appointment ID: ${res.error}`, 'error');
+      } else {
+        toast(`Appointment ID set for today: ${appointmentId}`, 'success');
+      }
+    }
+
+    // Fetch the account's invoice list from IVAC (server reuses the stored token + proxy),
+    // then pull each invoice PDF through the server and save it via a blob download.
+    async function downloadInvoice(id, phone) {
+      const btn = document.getElementById(`btn-invoice-${phone}`);
+      if (btn) btn.disabled = true;
+      try {
+        toast(`Fetching invoices for ${phone}...`, 'info');
+        const list = await api(`/api/accounts/${id}/invoices`);
+        if (!list.success) return toast(`${phone}: ${list.error || 'Failed to fetch invoices'}`, 'error');
+
+        let done = 0;
+        for (let i = 0; i < list.invoices.length; i++) {
+          const inv = list.invoices[i];
+          try {
+            const res = await fetch(`/api/accounts/${id}/invoices/${encodeURIComponent(inv.txrId)}/download`);
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              toast(`${phone}: ${err.error || `Invoice download failed (HTTP ${res.status})`}`, 'error');
+              continue;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            // Filename is the account phone (e.g. 01851117796.pdf). If the account has more
+            // than one invoice, suffix the extras so they don't overwrite each other.
+            a.download = i === 0 ? `${phone}.pdf` : `${phone}-${i + 1}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            done++;
+          } catch (e) {
+            toast(`${phone}: ${e.message}`, 'error');
+          }
+        }
+        if (done) toast(`${phone}: downloaded ${done} invoice${done > 1 ? 's' : ''} ✔`, 'success');
+      } catch (e) {
+        toast(`${phone}: ${e.message}`, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // Fetch the account overview; the BGD number is printed into the account's log panel by the
+    // server (via the account_log socket event), so this just triggers it and toasts the result.
+    async function fetchOverview(id, phone) {
+      const btn = document.getElementById(`btn-overview-${phone}`);
+      if (btn) btn.disabled = true;
+      try {
+        toast(`Fetching overview for ${phone}...`, 'info');
+        const res = await api(`/api/accounts/${id}/overview`, 'POST');
+        if (!res.success) return toast(`${phone}: ${res.error || 'Overview failed'}`, 'error');
+        if (res.lines && res.lines.length) {
+          toast(`${phone}: ${res.lines.length} applicant(s) — see log`, 'success');
+        } else {
+          toast(`${phone}: no overview/BGD info found`, 'warn');
+        }
+      } catch (e) {
+        toast(`${phone}: ${e.message}`, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function openBrowser(id, phone) {
+      toast(`Launching browser for ${phone}...`, 'info');
+      const res = await api(`/api/accounts/${id}/open-browser`, 'POST');
+      if (res.error) {
+        toast(`Failed to open browser: ${res.error}`, 'error');
+      } else {
+        toast('Browser launched successfully!', 'success');
+      }
+    }
+
+    // ─── Edit Account Modal ───────────────────────────────────────────────────
+    let currentEditId = null;
+    function openEditModal(id, phone, name, password, email, assigned_ip) {
+      currentEditId = id;
+      document.getElementById('edit-name').value = name || '';
+      document.getElementById('edit-phone').value = phone;
+      document.getElementById('edit-password').value = password || '';
+      document.getElementById('edit-email').value = email || '';
+      document.getElementById('edit-assigned-ip').value = assigned_ip || '';
+      document.getElementById('edit-modal').classList.add('open');
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.remove('open');
+      currentEditId = null;
+    }
+
+    async function saveEditAccount() {
+      const name = document.getElementById('edit-name').value.trim();
+      const phone = document.getElementById('edit-phone').value.trim();
+      const password = document.getElementById('edit-password').value.trim();
+      const email = document.getElementById('edit-email').value.trim();
+      const assigned_ip = document.getElementById('edit-assigned-ip').value.trim();
+      if (!phone || !password) return toast('Phone and password required', 'error');
+      const res = await api(`/api/accounts/${currentEditId}`, 'PUT', { phone, password, name, email, assigned_ip });
+      if (res.error) return toast(res.error, 'error');
+      toast('Account updated', 'success');
+      closeEditModal();
+      loadAccounts(); renderDashboard();
+    }
+
+    // ─── Proxy Modal ──────────────────────────────────────────────────────────
+    async function openProxyModal(accountId, phone) {
+      currentProxyAccountId = accountId;
+      document.getElementById('proxy-modal-phone').textContent = phone;
+      document.getElementById('proxy-bulk-input').value = '';
+      document.getElementById('proxy-modal').classList.add('open');
+      await refreshProxyList(accountId);
+    }
+
+    function closeProxyModal() {
+      document.getElementById('proxy-modal').classList.remove('open');
+      currentProxyAccountId = null;
+    }
+
+    async function refreshProxyList(accountId) {
+      const proxies = await api(`/api/accounts/${accountId}/proxies`);
+      const list = document.getElementById('proxy-list');
+      list.innerHTML = proxies.length
+        ? proxies.map(p => `<span class="proxy-tag">${escapeHtml(p.proxy_url)}<button class="proxy-del" onclick="deleteProxy(${p.id})">✕</button></span>`).join('')
+        : `<span style="color:var(--muted);font-size:12px;">No proxies yet</span>`;
+    }
+
+    async function deleteProxy(id) {
+      await api(`/api/proxies/${id}`, 'DELETE');
+      await refreshProxyList(currentProxyAccountId);
+      toast('Proxy removed', 'success');
+    }
+
+    async function saveBulkProxies() {
+      const raw = document.getElementById('proxy-bulk-input').value.trim();
+      if (!raw) return toast('Enter at least one proxy', 'error');
+      const proxies = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      const res = await api(`/api/accounts/${currentProxyAccountId}/proxies/bulk`, 'POST', { proxies });
+      if (res.error) return toast(res.error, 'error');
+      toast(`Added ${res.created} proxies`, 'success');
+      document.getElementById('proxy-bulk-input').value = '';
+      await refreshProxyList(currentProxyAccountId);
+    }
+
+    // ─── Files Modal (PDF documents for the file-upload step) ─────────────────
+    let currentFilesAccountId = null;
+
+    async function openFilesModal(accountId, phone) {
+      currentFilesAccountId = accountId;
+      document.getElementById('files-modal-phone').textContent = phone;
+      document.getElementById('files-input').value = '';
+      document.getElementById('files-modal').classList.add('open');
+      await refreshFilesList(accountId);
+    }
+
+    function closeFilesModal() {
+      document.getElementById('files-modal').classList.remove('open');
+      currentFilesAccountId = null;
+    }
+
+    function fmtBytes(n) {
+      if (!n && n !== 0) return '';
+      return n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
+    }
+
+    async function refreshFilesList(accountId) {
+      const files = await api(`/api/accounts/${accountId}/files`);
+      const list = document.getElementById('files-list');
+      if (!Array.isArray(files) || !files.length) {
+        list.innerHTML = `<span style="color:var(--muted);font-size:12px;">No documents yet</span>`;
+        return;
+      }
+      list.innerHTML = files.map((f, i) => {
+        const done = !!f.uploaded_at;
+        const badge = done
+          ? '<span style="font-size:10px;color:var(--success,#3fb950);border:1px solid var(--success,#3fb950);border-radius:4px;padding:1px 5px;">✓ Uploaded</span>'
+          : '<span style="font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">⏳ Pending</span>';
+        return `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;">
+          <span style="font-size:11px;color:var(--muted);min-width:60px;">Applicant ${i + 1}${(f.is_primary === 1 || f.is_primary === true) ? ' (primary)' : ''}</span>
+          <span class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.filename)}</span>
+          ${badge}
+          <span style="font-size:11px;color:var(--muted);">${fmtBytes(f.byte_size)}</span>
+          <button class="btn btn-danger btn-sm" onclick="deleteAccountFile(${f.id})">✕</button>
+        </div>`;
+      }).join('');
+    }
+
+    async function resetAccountUploads() {
+      const res = await api(`/api/accounts/${currentFilesAccountId}/files/reset-uploads`, 'POST');
+      if (res.error) return toast(res.error, 'error');
+      await refreshFilesList(currentFilesAccountId);
+      toast('Upload status reset — files will re-upload on the next run', 'success');
+    }
+
+    async function deleteAccountFile(fileId) {
+      await api(`/api/accounts/${currentFilesAccountId}/files/${fileId}`, 'DELETE');
+      await refreshFilesList(currentFilesAccountId);
+      toast('Document removed', 'success');
+    }
+
+    async function uploadAccountFiles() {
+      const input = document.getElementById('files-input');
+      if (!input.files || !input.files.length) return toast('Choose at least one PDF', 'error');
+      const fd = new FormData();
+      for (const file of input.files) fd.append('files', file);
+      try {
+        const resp = await fetch(`/api/accounts/${currentFilesAccountId}/files`, { method: 'POST', body: fd });
+        const res = await resp.json();
+        if (!resp.ok || res.error) return toast(res.error || 'Upload failed', 'error');
+        toast(`Uploaded ${res.count} document(s)`, 'success');
+        input.value = '';
+        await refreshFilesList(currentFilesAccountId);
+      } catch (e) {
+        toast('Upload failed: ' + e.message, 'error');
+      }
+    }
+
+    // ─── OTP Servers ────────────────────────────────────────────────────────────
+    async function loadOtpServers() {
+      const servers = await api('/api/otp-servers');
+      const tbody = document.getElementById('otp-servers-table');
+      if (!servers.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No OTP servers found</td></tr>'; }
+      else {
+        tbody.innerHTML = servers.map(s => `
+          <tr>
+            <td class="mono" style="font-weight:600;">${s.url}</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" onchange="toggleOtpServer(${s.id}, this.checked)" ${s.is_active ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+            <td style="color:var(--muted);font-size:12px;">${new Date(s.created_at).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteOtpServer(${s.id})">✕ Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    async function addOtpServer() {
+      const url = document.getElementById('new-otp-server').value.trim();
+      if (!url) return toast('Server URL required', 'error');
+      const res = await api('/api/otp-servers', 'POST', { url });
+      if (res.error) return toast(res.error, 'error');
+      document.getElementById('new-otp-server').value = '';
+      toast('OTP server added!', 'success');
+      loadOtpServers();
+    }
+
+    async function deleteOtpServer(id) {
+      if (!confirm('Delete this OTP server?')) return;
+      await api('/api/otp-servers/' + id, 'DELETE');
+      toast('OTP server deleted', 'success');
+      loadOtpServers();
+    }
+
+    async function toggleOtpServer(id, isActive) {
+      await api('/api/otp-servers/' + id + '/toggle', 'POST', { isActive: isActive ? 1 : 0 });
+      toast('OTP server status updated', 'success');
+    }
+
+    // ─── API IPs ──────────────────────────────────────────────────────────────
+    async function loadApiIps() {
+      const ips = await api('/api/ips');
+      const tbody = document.getElementById('api-ips-table');
+      if (!ips.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No IPs found</td></tr>'; }
+      else {
+        tbody.innerHTML = ips.map(ip => `
+          <tr>
+            <td><input type="checkbox" class="api-ip-checkbox" value="${ip.id}"></td>
+            <td class="mono" style="font-weight:600;">${ip.ip}</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" onchange="toggleApiIp(${ip.id}, this.checked)" ${ip.is_active ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+            <td style="color:var(--muted);font-size:12px;">${new Date(ip.created_at).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteApiIp(${ip.id})">✕ Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      const opts = `<option value="">Default (api.ivacbd.com)</option>` + ips.map(ip => `<option value="${ip.ip}">${ip.ip}</option>`).join('');
+      const newSel = document.getElementById('new-assigned-ip');
+      const editSel = document.getElementById('edit-assigned-ip');
+      if (newSel) newSel.innerHTML = opts;
+      if (editSel) {
+        const val = editSel.value;
+        editSel.innerHTML = opts;
+        editSel.value = val;
+      }
+    }
+
+    async function addApiIp() {
+      const ip = document.getElementById('new-api-ip').value.trim();
+      if (!ip) return toast('IP required', 'error');
+      const res = await api('/api/ips', 'POST', { ip });
+      if (res.error) return toast(res.error, 'error');
+      document.getElementById('new-api-ip').value = '';
+      toast('IP added!', 'success');
+      loadApiIps();
+    }
+
+    async function addBulkApiIps() {
+      const raw = document.getElementById('bulk-api-ips').value.trim();
+      if (!raw) return toast('Enter at least one IP', 'error');
+      const ips = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      const res = await api('/api/ips/bulk', 'POST', { ips });
+      if (res.error) return toast(res.error, 'error');
+      toast(`Added ${res.created} IPs`, 'success');
+      document.getElementById('bulk-api-ips').value = '';
+      loadApiIps();
+    }
+
+    async function deleteApiIp(id) {
+      if (!confirm('Delete this IP?')) return;
+      await api('/api/ips/' + id, 'DELETE');
+      toast('IP deleted', 'success');
+      loadApiIps();
+    }
+
+    async function toggleApiIp(id, isActive) {
+      await api('/api/ips/' + id + '/toggle', 'POST', { isActive: isActive ? 1 : 0 });
+      toast('IP status updated', 'success');
+    }
+
+    function toggleSelectAllApiIps(source) {
+      const checkboxes = document.querySelectorAll('.api-ip-checkbox');
+      checkboxes.forEach(cb => cb.checked = source.checked);
+    }
+
+    async function bulkDeleteApiIps() {
+      const checkboxes = document.querySelectorAll('.api-ip-checkbox:checked');
+      if (!checkboxes.length) return toast('Select at least one IP', 'warn');
+      if (!confirm(`Delete ${checkboxes.length} selected IPs?`)) return;
+
+      const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      const res = await api('/api/ips/bulk-delete', 'POST', { ids });
+      if (res.error) return toast(res.error, 'error');
+
+      toast(`Deleted ${res.deleted} IPs`, 'success');
+      document.getElementById('selectAllApiIps').checked = false;
+      loadApiIps();
+    }
+
+    // ─── Global Proxy Manager ─────────────────────────────────────────────────
+    let allProxies = [];
+
+    async function loadProxies() {
+      allProxies = await api('/api/proxies');
+
+      // Populate the "assign to account" + filter dropdowns from the accounts list.
+      if (!accounts || !accounts.length) { try { await loadAccounts(); } catch (e) {} }
+      const acctOpts = (accounts || []).map(a => `<option value="${a.id}">${escapeHtml(a.phone)}${a.name ? ' — ' + escapeHtml(a.name) : ''}</option>`).join('');
+      const addSel = document.getElementById('proxy-add-account');
+      if (addSel) { const v = addSel.value; addSel.innerHTML = acctOpts; if (v) addSel.value = v; }
+      const filterSel = document.getElementById('proxy-filter-account');
+      if (filterSel) { const v = filterSel.value; filterSel.innerHTML = `<option value="">All accounts</option>` + acctOpts; filterSel.value = v || ''; }
+
+      renderProxies();
+    }
+
+    function renderProxies() {
+      const acctFilter = document.getElementById('proxy-filter-account')?.value || '';
+      const statusFilter = document.getElementById('proxy-filter-status')?.value || 'all';
+      const rows = allProxies.filter(p => {
+        if (acctFilter && String(p.account_id) !== String(acctFilter)) return false;
+        if (statusFilter === 'active' && !p.is_active) return false;
+        if (statusFilter === 'inactive' && p.is_active) return false;
+        return true;
+      });
+      const tbody = document.getElementById('proxies-table');
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No proxies found</td></tr>'; return; }
+
+      // Build the "Move to…" options once (all accounts; current account is skipped per-row).
+      const acctOptionsFor = (currentId) => (accounts || [])
+        .filter(a => String(a.id) !== String(currentId))
+        .map(a => `<option value="${a.id}">${escapeHtml(a.phone)}${a.name ? ' — ' + escapeHtml(a.name) : ''}</option>`)
+        .join('');
+
+      // rows arrive already ordered by account (dashboard order). Emit a group header row each
+      // time the account changes, then that account's proxy rows beneath it.
+      let html = '';
+      let lastAcct = null;
+      let groupCount = 0;
+      const countByAcct = rows.reduce((m, p) => (m[p.account_id] = (m[p.account_id] || 0) + 1, m), {});
+      for (const p of rows) {
+        if (p.account_id !== lastAcct) {
+          lastAcct = p.account_id;
+          html += `<tr style="background:var(--bg2);">
+            <td colspan="5" style="font-weight:700;padding:10px 12px;">
+              📱 <span class="mono">${escapeHtml(p.phone)}</span>${p.name ? ' <span style="color:var(--muted);font-weight:500;">— ' + escapeHtml(p.name) + '</span>' : ''}
+              <span style="color:var(--muted);font-weight:500;font-size:12px;">(${countByAcct[p.account_id]} ${countByAcct[p.account_id] == 1 ? 'proxy' : 'proxies'})</span>
+            </td>
+          </tr>`;
+        }
+        html += `<tr>
+          <td><input type="checkbox" class="proxy-checkbox" value="${p.id}"></td>
+          <td class="mono" style="font-weight:600;">${escapeHtml(p.proxy_url)}</td>
+          <td>
+            <label class="toggle-switch">
+              <input type="checkbox" onchange="toggleProxyStatus(${p.id}, this.checked)" ${p.is_active ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td style="color:var(--muted);font-size:12px;">${new Date(p.created_at).toLocaleString()}</td>
+          <td style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-ghost btn-sm" onclick="checkProxyGlobal(${p.id}, this)" title="Check proxy connectivity">🌐 CP</button>
+            <select onchange="reassignProxy(${p.id}, this.value); this.value='';" title="Move to another account" style="max-width:150px;">
+              <option value="">↪ Move to…</option>
+              ${acctOptionsFor(p.account_id)}
+            </select>
+            <button class="btn btn-danger btn-sm" onclick="deleteProxyGlobal(${p.id})">✕ Delete</button>
+          </td>
+        </tr>`;
+      }
+      tbody.innerHTML = html;
+    }
+
+    async function checkProxyGlobal(id, btn) {
+      const p = allProxies.find(x => x.id === id);
+      if (!p) return;
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const res = await api('/api/proxies/' + id + '/check', 'POST', { proxy_url: p.proxy_url });
+        if (res.success) {
+          toast(`✅ ${res.ip} · ${res.time}ms · ${res.type} · ${res.protocol}`, 'success');
+          btn.textContent = '✅ OK';
+        } else {
+          toast(`❌ ${res.error}`, 'error');
+          btn.textContent = '❌ Fail';
+        }
+      } catch (e) {
+        toast('❌ ' + (e.message || 'error'), 'error');
+        btn.textContent = '❌ Fail';
+      } finally {
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = orig; }, 4000);
+      }
+    }
+
+    async function reassignProxy(proxyId, accountId) {
+      if (!accountId) return;
+      const res = await api('/api/proxies/' + proxyId + '/reassign', 'POST', { account_id: accountId });
+      if (res.error) return toast(res.error, 'error');
+      toast('Proxy moved', 'success');
+      loadProxies();
+    }
+
+    async function addProxiesGlobal() {
+      const accountId = document.getElementById('proxy-add-account').value;
+      if (!accountId) return toast('Select an account', 'error');
+      const raw = document.getElementById('proxy-add-bulk').value.trim();
+      if (!raw) return toast('Enter at least one proxy', 'error');
+      const proxies = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      const res = await api(`/api/accounts/${accountId}/proxies/bulk`, 'POST', { proxies });
+      if (res.error) return toast(res.error, 'error');
+      toast(`Added ${res.created} proxies`, 'success');
+      document.getElementById('proxy-add-bulk').value = '';
+      loadProxies();
+    }
+
+    async function toggleProxyStatus(id, isActive) {
+      await api('/api/proxies/' + id + '/toggle', 'POST', { isActive: isActive ? 1 : 0 });
+      const p = allProxies.find(x => x.id === id);
+      if (p) p.is_active = isActive ? 1 : 0;
+      toast('Proxy status updated', 'success');
+    }
+
+    async function deleteProxyGlobal(id) {
+      if (!confirm('Delete this proxy?')) return;
+      await api('/api/proxies/' + id, 'DELETE');
+      toast('Proxy deleted', 'success');
+      loadProxies();
+    }
+
+    function toggleSelectAllProxies(source) {
+      document.querySelectorAll('.proxy-checkbox').forEach(cb => cb.checked = source.checked);
+    }
+
+    async function bulkDeleteProxies() {
+      const checkboxes = document.querySelectorAll('.proxy-checkbox:checked');
+      if (!checkboxes.length) return toast('Select at least one proxy', 'warn');
+      if (!confirm(`Delete ${checkboxes.length} selected proxies?`)) return;
+      const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      const res = await api('/api/proxies/bulk-delete', 'POST', { ids });
+      if (res.error) return toast(res.error, 'error');
+      toast(`Deleted ${res.deleted} proxies`, 'success');
+      document.getElementById('selectAllProxies').checked = false;
+      loadProxies();
+    }
+
+    async function loadLiveTestIps() {
+      const ips = await api('/api/ips');
+      const tbody = document.getElementById('live-test-table');
+      if (!ips.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted)">No IPs found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = ips.map(ip => `
+        <tr id="live-test-row-${ip.id}">
+          <td class="mono" style="font-weight:600;">${ip.ip}</td>
+          <td id="live-test-status-${ip.id}" style="color:var(--muted)">Not tested</td>
+          <td>
+            <button class="btn btn-primary btn-sm" onclick="testIp(${ip.id}, '${ip.ip}')">🔄 Test</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteApiIpFromLiveTest(${ip.id})">✕ Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function testIp(id, ip) {
+      const statusEl = document.getElementById(`live-test-status-${id}`);
+      if (statusEl) {
+        statusEl.innerHTML = 'Testing... <span class="status-dot"></span>';
+        statusEl.style.color = 'var(--info)';
+      }
+
+      const res = await api('/api/ips/test', 'POST', { ip });
+
+      if (statusEl) {
+        if (res.statusCode === 500) {
+          statusEl.innerHTML = `✅ ${res.statusText} (${res.statusCode})`;
+          statusEl.style.color = 'var(--success)';
+        } else if (res.statusCode === 503) {
+          statusEl.innerHTML = `⚠️ ${res.statusText} (${res.statusCode})`;
+          statusEl.style.color = 'var(--warn)';
+        } else {
+          statusEl.innerHTML = `❌ ${res.statusText} (${res.statusCode})`;
+          statusEl.style.color = 'var(--danger)';
+        }
+      }
+    }
+
+    async function testAllIps() {
+      const ips = await api('/api/ips');
+      if (!ips.length) return toast('No IPs to test', 'warn');
+
+      toast(`Testing ${ips.length} IPs...`, 'info');
+      // Test them with a small concurrency limit to not overwhelm the server entirely
+      for (const ip of ips) {
+        testIp(ip.id, ip.ip);
+        await new Promise(r => setTimeout(r, 100)); // small stagger
+      }
+    }
+
+    async function deleteApiIpFromLiveTest(id) {
+      if (!confirm('Delete this IP?')) return;
+      await api('/api/ips/' + id, 'DELETE');
+      toast('IP deleted', 'success');
+      loadLiveTestIps();
+      loadApiIps(); // Refresh the main table too
+    }
+
+    // ─── Callback Tasks ───────────────────────────────────────────────────────
+    async function loadCallbackTasks() {
+      const tasks = await api('/api/callbacks');
+      const tbody = document.getElementById('callbacks-table');
+      if (!tasks.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No callback tasks found</td></tr>'; }
+      else {
+        tbody.innerHTML = tasks.map(t => `
+          <tr>
+            <td class="mono" style="font-weight:600; font-size:11px; word-break: break-all;">${escapeHtml(t.uri)}</td>
+            <td>${t.interval_ms} ms</td>
+            <td>${t.workers}</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" onchange="toggleCallbackTask(${t.id}, this.checked)" ${t.is_active ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteCallbackTask(${t.id})">✕ Delete</button>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="5" style="padding:0; border-bottom:1px solid rgba(46,50,80,.5);">
+              <div id="callback-log-${t.id}" style="max-height:80px; overflow-y:auto; background:#0a0c14; padding:4px 8px; font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--muted);">
+                Waiting for logs...
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    async function addCallbackTask() {
+      const uri = document.getElementById('new-callback-uri').value.trim();
+      const interval_ms = parseInt(document.getElementById('new-callback-interval').value) || 1000;
+      const workers = parseInt(document.getElementById('new-callback-workers').value) || 1;
+
+      if (!uri) return toast('URI required', 'error');
+      const res = await api('/api/callbacks', 'POST', { uri, interval_ms, workers });
+      if (res.error) return toast(res.error, 'error');
+
+      document.getElementById('new-callback-uri').value = '';
+      toast('Callback Task added!', 'success');
+      loadCallbackTasks();
+    }
+
+    async function deleteCallbackTask(id) {
+      if (!confirm('Delete this task?')) return;
+      await api('/api/callbacks/' + id, 'DELETE');
+      toast('Task deleted', 'success');
+      loadCallbackTasks();
+    }
+
+    async function toggleCallbackTask(id, isActive) {
+      await api('/api/callbacks/' + id + '/toggle', 'POST', { isActive: isActive ? 1 : 0 });
+      toast('Task status updated', 'success');
+    }
+
+    // ─── Config ───────────────────────────────────────────────────────────────
+    // Each field: { label (visible caption), title (hover help), group, type/options/default }
+    const CONFIG_GROUPS = [
+      { id: 'flow', title: 'Flow Toggles' },
+      { id: 'timing', title: 'Timing & Retries' },
+      { id: 'cf', title: '☁️ Cloudflare Pacing — anti-429 (per account / per token)' },
+    ];
+
+    const CONFIG_LABELS = {
+      // ─── Flow toggles ───
+      autoReserveSlot: { group: 'flow', label: 'Auto Reserve Slot', title: 'On = bot reserves the slot automatically. Off = opens a browser after OTP so you finish manually.', type: 'select', options: { '1': 'On', '0': 'Off' }, default: '1' },
+      autoFileUpload: { group: 'flow', label: 'Auto File Upload', title: 'On = after OTP verify, the bot auto-uploads each account\'s stored PDF(s) before Reserve. Off = skips the upload step.', type: 'select', options: { '1': 'On', '0': 'Off' }, default: '1' },
+
+      // ─── Timing & retries (seconds / counts) ───
+      retryDelay: { group: 'timing', label: 'Retry Delay (s)', title: 'Seconds to wait between normal retry attempts.', default: 5 },
+      failDelay: { group: 'timing', label: 'Fail Delay (s)', title: 'Seconds to wait after a hard failure before trying again.', default: 5 },
+      successDelay: { group: 'timing', label: 'Success Delay (s)', title: 'Seconds to wait after a successful step.', default: 0 },
+      paymentInitDelay: { group: 'timing', label: 'Payment Init Delay (s)', title: 'Seconds to wait after Reserve Slot succeeds before hitting Payment Init. Helps on busy / Cloudflare-520 servers. 0 = no wait.', default: 0 },
+      maxRetry: { group: 'timing', label: 'Max Retry (login/pay)', title: 'Max retries for Sign In / Payment before giving up.', default: 10 },
+      maxReserveRetry: { group: 'timing', label: 'Max Retry (reserve)', title: 'Max retries for Reserve Slot before giving up.', default: 100 },
+
+      // ─── Cloudflare pacing (per account = per proxy = per bearer token) ───
+      cf_min_interval_ms: { group: 'cf', label: 'Min Gap Between Reqs (ms)', title: 'Minimum milliseconds between THIS account\'s requests. This is the main throttle. Lower = faster but more 429. 0 = no pacing.', default: 700 },
+      cf_backoff_base_ms: { group: 'cf', label: '429 Backoff Base (ms)', title: 'How long to pause this account after a 429. Doubles on each consecutive 429. Honors the server\'s Retry-After header if present.', default: 2000 },
+      cf_backoff_max_ms: { group: 'cf', label: '429 Backoff Max (ms)', title: 'Upper cap on the 429 backoff pause.', default: 45000 },
+      fivexx_backoff_ms: { group: 'cf', label: '5xx Backoff Base (ms)', title: 'Base wait on a 5xx response (502/503/504 and Cloudflare 520-526). Grows with consecutive retries up to 8s.', default: 1000 },
+      cf_cache_buster: { group: 'cf', label: 'Cache-Buster', title: 'Keep OFF behind Cloudflare. On = adds _t/_r query params + no-cache headers (legacy EC2 behavior, looks bot-like to Cloudflare).', type: 'select', options: { '0': 'Off', '1': 'On' }, default: '0' },
+    };
+
+    function buildConfigField(key, meta, config) {
+      const cell = document.createElement('div');
+      cell.className = 'cfg-cell';
+
+      const lab = document.createElement('label');
+      lab.setAttribute('for', `cfg-${key}`);
+      lab.textContent = meta.label;
+      lab.title = meta.title || '';
+      cell.appendChild(lab);
+
+      let el;
+      if (meta.type === 'select') {
+        el = document.createElement('select');
+        let currentVal = config[key];
+        if ((currentVal === undefined || currentVal === '') && meta.default !== undefined) currentVal = meta.default;
+        for (const [v, text] of Object.entries(meta.options)) {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = text;
+          if (String(v) === String(currentVal !== undefined ? currentVal : 0)) opt.selected = true;
+          el.appendChild(opt);
+        }
+      } else {
+        el = document.createElement('input');
+        el.type = 'number';
+        el.min = 0;
+        el.value = (config[key] !== undefined && config[key] !== '')
+          ? config[key]
+          : (meta.default !== undefined ? meta.default : 0);
+      }
+      el.id = `cfg-${key}`;
+      el.className = 'dynamic-cfg';
+      el.title = meta.title || '';
+      el.addEventListener('change', saveConfig);
+      cell.appendChild(el);
+      return cell;
+    }
+
+    function toggleConfigPanel() {
+      const p = document.getElementById('cfg-panel');
+      if (!p) return;
+      const open = p.classList.toggle('open');
+      try { localStorage.setItem('cfgPanelOpen', open ? '1' : '0'); } catch (e) { }
+    }
+
+    async function loadConfig() {
+      const config = await api('/api/config');
+      const container = document.getElementById('config-grid');
+      if (!container) return;
+      container.innerHTML = '';
+
+      // Restore collapsed/expanded state (collapsed by default).
+      const panel = document.getElementById('cfg-panel');
+      if (panel) panel.classList.toggle('open', localStorage.getItem('cfgPanelOpen') === '1');
+
+      CONFIG_GROUPS.forEach(group => {
+        const entries = Object.entries(CONFIG_LABELS).filter(([, m]) => (m.group || 'flow') === group.id);
+        if (!entries.length) return;
+
+        const section = document.createElement('div');
+        section.className = 'cfg-group';
+
+        const head = document.createElement('div');
+        head.className = 'cfg-group-title';
+        head.textContent = group.title;
+        section.appendChild(head);
+
+        const grid = document.createElement('div');
+        grid.className = 'cfg-grid';
+        entries.forEach(([key, meta]) => grid.appendChild(buildConfigField(key, meta, config)));
+        section.appendChild(grid);
+        container.appendChild(section);
+      });
+
+      const advancedKeys = ['primary_captcha_url', 'capmonster_key', 'enable_401_auto', 'api_timeout', 'solver_proxy', 'ep_signin_url', 'ep_signin_captchaType', 'ep_signin_siteKey', 'ep_signin_encode', 'ep_signin_ip_count', 'ep_reserve_url', 'ep_reserve_captchaType', 'ep_reserve_siteKey', 'ep_reserve_encode', 'ep_reserve_ip_count', 'ep_verifyotp_url', 'ep_verifyotp_ip_count', 'ep_payment_url', 'ep_payment_captchaType', 'ep_payment_siteKey', 'ep_payment_ip_count', 'ep_fileupload_url', 'ep_fileupload_captchaType', 'ep_fileupload_siteKey', 'ep_fileupload_ip_count'];
+      advancedKeys.forEach(k => {
+        const el = document.getElementById(`cfg-${k}`);
+        if (el && config[k] !== undefined) el.value = config[k];
+      });
+    }
+    async function checkCapMonsterBalance() {
+      const btn = document.getElementById('btn-capmonster-balance');
+      const key = document.getElementById('cfg-capmonster_key').value.trim();
+      if (!key) return toast('Enter CapMonster API key first', 'error');
+      
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Loading...';
+      btn.disabled = true;
+      
+      try {
+        const res = await api('/api/capmonster/balance', 'POST', { key });
+        btn.disabled = false; // Re-enable so opacity goes back to 100%
+        if (res.success) {
+          btn.innerHTML = `💵 $${res.balance.toFixed(4)}`;
+          btn.className = 'btn btn-sm';
+          btn.style.backgroundColor = 'var(--success)';
+          btn.style.color = '#ffffff';
+          toast('Balance fetched successfully', 'success');
+        } else {
+          btn.innerHTML = '❌ Error';
+          btn.className = 'btn btn-danger btn-sm';
+          toast(res.error || 'Failed to fetch balance', 'error');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '❌ Error';
+        btn.className = 'btn btn-danger btn-sm';
+        toast(err.message, 'error');
+      }
+      
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.className = 'btn btn-info btn-sm';
+        btn.style.backgroundColor = '';
+        btn.style.color = '';
+      }, 10000);
+    }
+
+    async function saveConfig() {
+      const body = {};
+      Object.keys(CONFIG_LABELS).forEach(key => { const el = document.getElementById(`cfg-${key}`); if (el) body[key] = el.value; });
+      const res = await api('/api/config', 'PUT', body);
+      toast(res.success ? '💾 Config saved!' : res.error, res.success ? 'success' : 'error');
+    }
+
+    async function saveEndpointConfig() {
+      const advancedKeys = ['primary_captcha_url', 'capmonster_key', 'enable_401_auto', 'api_timeout', 'solver_proxy', 'ep_signin_url', 'ep_signin_captchaType', 'ep_signin_siteKey', 'ep_signin_encode', 'ep_signin_ip_count', 'ep_reserve_url', 'ep_reserve_captchaType', 'ep_reserve_siteKey', 'ep_reserve_encode', 'ep_reserve_ip_count', 'ep_verifyotp_url', 'ep_verifyotp_ip_count', 'ep_payment_url', 'ep_payment_captchaType', 'ep_payment_siteKey', 'ep_payment_ip_count', 'ep_fileupload_url', 'ep_fileupload_captchaType', 'ep_fileupload_siteKey', 'ep_fileupload_ip_count'];
+      const body = {};
+      advancedKeys.forEach(k => {
+        const el = document.getElementById(`cfg-${k}`);
+        if (el) body[k] = el.value;
+      });
+      const res = await api('/api/config', 'PUT', body);
+      toast(res.success ? '💾 Endpoint config saved!' : res.error, res.success ? 'success' : 'error');
+    }
+
+    function autoFillSiteKey(ep, type) {
+      const input = document.getElementById(`cfg-ep_${ep}_siteKey`);
+      if (!input) return;
+      // If the user manually edited the site key already and it's not the default, we might not want to overwrite it.
+      // But for simplicity according to the requirement "change automaticly", we overwrite:
+      if (type === 'TurnstileTask') {
+        input.value = '0x4AAAAAACghKkJHL1t7UkuZ';
+      } else if (type.startsWith('Recaptcha') || type.startsWith('NoCaptcha')) {
+        input.value = '6LdyiGMsAAAAAJefesdWMjxy8pu3A3DmbeJkkdUl';
+      }
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    async function api(url, method = 'GET', body = null) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(url, opts);
+      return res.json();
+    }
+
+    function escapeHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function submitManualOtp(phone) {
+      const input = document.getElementById(`manual-otp-${phone}`);
+      if (!input || !input.value.trim()) return toast('Enter OTP first', 'warn');
+      socket.emit('manual_otp', { phone, otp: input.value.trim() });
+      toast(`Sent manual OTP for ${phone}`, 'info');
+      input.value = '';
+    }
+
+    // Fire a single manual Reserve (2) or Payment (3) request, in parallel with the running
+    // worker. OTP verify keeps running; the result shows in the account's live log.
+    async function jumpStep(id, phone, step) {
+      const label = step === 3 ? 'Payment' : 'Reserve';
+      const res = await api(`/api/accounts/${id}/jump`, 'POST', { step });
+      toast(res.success ? `🖐️ ${phone}: ${label} hit sent — see log` : (res.error || 'Failed'), res.success ? 'info' : 'error');
+    }
+
+    async function launchSolver() {
+      toast('Launching Captcha Solver Window...', 'info');
+      try {
+        const res = await fetch('/api/launch-solver', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) toast('Solver Window Opened!', 'success');
+        else toast('Failed: ' + data.error, 'danger');
+      } catch (e) {
+        toast('Error: ' + e.message, 'danger');
+      }
+    }
+
+    // ─── Signup (auto sign-up queue) ──────────────────────────────────────────
+    let signups = [];
+
+    const SIGNUP_STATUS_COLORS = {
+      PENDING: 'var(--muted)', QUEUED: '#e0a020', RUNNING: '#3aa0ff',
+      PHONE_OTP_SENT: '#e0a020', PHONE_VERIFIED: '#f0a832',
+      EMAIL_OTP_SENT: '#3aa0ff', EMAIL_VERIFIED: '#4ac0e0',
+      DONE: '#2ecc71', CONVERTED: '#9b59b6', FAILED: '#e74c3c', STOPPED: '#e0a020'
+    };
+
+    // The 5-step flow: which step each value starts from.
+    const SIGNUP_STEPS = [
+      { v: 1, label: '1: Mobile check' },
+      { v: 2, label: '2: Mobile OTP verify' },
+      { v: 3, label: '3: Email check' },
+      { v: 4, label: '4: Email OTP verify' },
+      { v: 5, label: '5: Sign up' }
+    ];
+
+    function signupBadge(status, step) {
+      const color = SIGNUP_STATUS_COLORS[status] || 'var(--muted)';
+      const s = parseInt(step || 0);
+      const stepTag = (s > 0 && s < 5) ? ` <span style="color:var(--muted);font-weight:500;">(${s}/5)</span>` : '';
+      return `<span style="color:${color}; font-weight:700; font-size:11px;">${escapeHtml(status || 'PENDING')}</span>${stepTag}`;
+    }
+
+    // Where a row would resume: the step after the last completed one (1..5).
+    function signupResumeStep(s) {
+      let r = parseInt(s.step || 0) + 1;
+      if (r < 1) r = 1; if (r > 5) r = 5;
+      return r;
+    }
+
+    function signupStepSelect(id, selected) {
+      const opts = SIGNUP_STEPS.map(o => `<option value="${o.v}" ${o.v === selected ? 'selected' : ''}>${o.label}</option>`).join('');
+      return `<select id="su-step-${id}" title="Step to start from" style="font-size:11px; padding:2px 4px; margin-right:2px;">${opts}</select>`;
+    }
+
+    function signupActions(s) {
+      const running = s.running || s.status === 'RUNNING';
+      const btns = [];
+      if (running) {
+        btns.push(`<button class="btn btn-warn btn-sm" onclick="stopSignup(${s.id})">⏹ Stop</button>`);
+      } else if (s.status === 'DONE') {
+        btns.push(`<button class="btn btn-primary btn-sm" onclick="convertSignup(${s.id})">→ Account</button>`);
+      } else if (s.status === 'CONVERTED') {
+        btns.push(`<span style="color:var(--muted);font-size:11px;">account #${s.account_id ?? ''}</span>`);
+      } else {
+        // Fresh, partly done, or FAILED: pick the step to start from (defaults to the resume point),
+        // then run. Choosing "1: Mobile check" reruns the whole flow.
+        btns.push(signupStepSelect(s.id, signupResumeStep(s)));
+        btns.push(`<button class="btn btn-success btn-sm" onclick="startSignupFromSelect(${s.id})">▶ Start</button>`);
+      }
+      if (!running && s.status !== 'CONVERTED') {
+        btns.push(`<button class="btn btn-ghost btn-sm" onclick="openSignupEdit(${s.id})">✏️ Edit</button>`);
+      }
+      btns.push(`<button class="btn btn-danger btn-sm" onclick="deleteSignup(${s.id})">✕</button>`);
+      return btns.join(' ');
+    }
+
+    // Read the row's step dropdown and start from there.
+    async function startSignupFromSelect(id) {
+      const sel = document.getElementById(`su-step-${id}`);
+      const step = sel ? parseInt(sel.value) : undefined;
+      await startSignup(id, step);
+    }
+
+    function signupRow(s) {
+      const name = [s.given_name, s.surname].filter(Boolean).join(' ') || '<span style="color:var(--muted)">—</span>';
+      return `
+        <tr id="su-row-${s.id}">
+          <td class="mono" style="font-size:11px; word-break:break-all;">${escapeHtml(s.email)}</td>
+          <td class="mono" style="font-size:11px;">${escapeHtml(s.phone)}</td>
+          <td style="font-size:12px;">${name}</td>
+          <td id="su-status-${s.id}">${signupBadge(s.status, s.step)}</td>
+          <td id="su-log-${s.id}" style="font-size:11px; color:var(--muted); max-width:280px; word-break:break-word;">${escapeHtml(s.last_log || '')}</td>
+          <td id="su-actions-${s.id}" style="white-space:nowrap;">${signupActions(s)}</td>
+        </tr>`;
+    }
+
+    async function loadSignups() {
+      const tbody = document.getElementById('signups-table');
+      try {
+        signups = await api('/api/signups');
+        if (!Array.isArray(signups) || !signups.length) {
+          signups = Array.isArray(signups) ? signups : [];
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No signups queued</td></tr>';
+          return;
+        }
+        tbody.innerHTML = signups.map(signupRow).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#e74c3c">${escapeHtml(e.message)}</td></tr>`;
+      }
+    }
+
+    const SIGNUP_FORM_IDS = {
+      email: 'su-in-email', phone: 'su-in-phone', password: 'su-in-password',
+      given_name: 'su-in-given', surname: 'su-in-surname', dob: 'su-in-dob',
+      nid: 'su-in-nid', passport: 'su-in-passport'
+    };
+
+    function clearSignupForm() {
+      Object.values(SIGNUP_FORM_IDS).forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      document.getElementById(SIGNUP_FORM_IDS.email).focus();
+    }
+
+    async function addSignupForm() {
+      const item = {};
+      for (const [key, id] of Object.entries(SIGNUP_FORM_IDS)) {
+        item[key] = (document.getElementById(id).value || '').trim();
+      }
+      if (!item.email || !item.phone || !item.password) {
+        return toast('Email, Phone and Password are required', 'warn');
+      }
+      const res = await api('/api/signups', 'POST', item);
+      if (res.created) {
+        toast('+ Added to queue', 'success');
+        clearSignupForm();
+      } else {
+        toast((res.errors && res.errors[0] && res.errors[0].error) || res.error || 'Failed to add', 'error');
+      }
+      loadSignups();
+    }
+
+    function signupOtpTimeout() {
+      const v = parseInt(document.getElementById('signup-otp-timeout').value);
+      return (!isNaN(v) && v >= 30) ? v : undefined;
+    }
+
+    // fromStep omitted → resume from the row's saved step (Continue). fromStep=0 → Restart.
+    async function startSignup(id, fromStep) {
+      const body = { otpTimeout: signupOtpTimeout() };
+      if (fromStep !== undefined) body.fromStep = fromStep;
+      const res = await api(`/api/signups/${id}/start`, 'POST', body);
+      const verb = fromStep === 0 ? 'Restarted' : 'Started';
+      toast(res.success ? `▶ Signup ${verb.toLowerCase()}` : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      loadSignups();
+    }
+
+    async function stopSignup(id) {
+      await api(`/api/signups/${id}/stop`, 'POST');
+      toast('⏹ Stopping signup...', 'warn');
+      loadSignups();
+    }
+
+    async function startAllSignups() {
+      const body = { otpTimeout: signupOtpTimeout() };
+      const gs = document.getElementById('signup-global-step').value;
+      if (gs) body.fromStep = parseInt(gs);
+      const res = await api('/api/signups/start-all', 'POST', body);
+      toast(res.success ? `▶ Started ${res.started} signup(s)` : (res.message || res.error), res.success ? 'success' : 'warn');
+      loadSignups();
+    }
+
+    async function stopAllSignups() {
+      await api('/api/signups/stop-all', 'POST');
+      toast('⏹ Stopping all signups...', 'warn');
+      loadSignups();
+    }
+
+    async function convertSignup(id) {
+      const res = await api(`/api/signups/${id}/convert`, 'POST');
+      toast(res.success ? `✅ Converted to account #${res.accountId}` : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      loadSignups();
+      if (res.success && typeof loadAccounts === 'function') loadAccounts();
+    }
+
+    async function deleteSignup(id) {
+      if (!confirm('Delete this signup from the queue?')) return;
+      const res = await api(`/api/signups/${id}`, 'DELETE');
+      toast(res.success ? '✕ Deleted' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      loadSignups();
+    }
+
+    function openSignupEdit(id) {
+      const s = signups.find(x => x.id === id);
+      if (!s) return;
+      document.getElementById('su-edit-id').value = s.id;
+      document.getElementById('su-edit-email').value = s.email || '';
+      document.getElementById('su-edit-phone').value = s.phone || '';
+      document.getElementById('su-edit-password').value = s.password || '';
+      document.getElementById('su-edit-dob').value = s.dob || '';
+      document.getElementById('su-edit-given').value = s.given_name || '';
+      document.getElementById('su-edit-surname').value = s.surname || '';
+      document.getElementById('su-edit-nid').value = s.nid || '';
+      document.getElementById('su-edit-passport').value = s.passport || '';
+      const step = s.step || 0;
+      document.getElementById('su-edit-note').textContent = step > 0
+        ? `Verified progress: step ${step}/3. Changing Email or Phone resets progress to step 0; editing other fields keeps it, so you can Continue.`
+        : '';
+      document.getElementById('signup-edit-modal').classList.add('open');
+    }
+
+    function closeSignupEdit() {
+      document.getElementById('signup-edit-modal').classList.remove('open');
+    }
+
+    async function saveSignupEdit() {
+      const g = id => (document.getElementById(id).value || '').trim();
+      const id = g('su-edit-id');
+      const body = {
+        email: g('su-edit-email'), phone: g('su-edit-phone'), password: g('su-edit-password'),
+        dob: g('su-edit-dob'), given_name: g('su-edit-given'), surname: g('su-edit-surname'),
+        nid: g('su-edit-nid'), passport: g('su-edit-passport')
+      };
+      if (!body.email || !body.phone || !body.password) return toast('Email, Phone and Password are required', 'warn');
+      const res = await api(`/api/signups/${id}`, 'PUT', body);
+      if (res.success) { toast('💾 Signup saved', 'success'); closeSignupEdit(); loadSignups(); }
+      else toast(res.error || 'Save failed', 'error');
+    }
+
+    // Live updates. Only touch the DOM when the Signup tab has been rendered at least once.
+    socket.on('signup_status', ({ id, status, step, lastLog, account_id }) => {
+      const s = signups.find(x => x.id === id);
+      if (s) {
+        s.status = status;
+        if (step != null) s.step = step;
+        if (lastLog != null) s.last_log = lastLog;
+        if (account_id != null) s.account_id = account_id;
+        s.running = (status === 'RUNNING');
+      }
+      const statusCell = document.getElementById(`su-status-${id}`);
+      if (statusCell) statusCell.innerHTML = signupBadge(status, s ? s.step : step);
+      const actionsCell = document.getElementById(`su-actions-${id}`);
+      if (actionsCell && s) actionsCell.innerHTML = signupActions(s);
+      if (lastLog != null) { const lc = document.getElementById(`su-log-${id}`); if (lc) lc.textContent = lastLog; }
+    });
+
+    socket.on('signup_log', ({ id, message }) => {
+      const lc = document.getElementById(`su-log-${id}`);
+      if (lc) lc.textContent = message;
+    });
+
+    let toastTimer;
+    function toast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `show ${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+    }
+
+    document.getElementById('proxy-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeProxyModal(); });
+    document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEditModal(); });
+    document.getElementById('signup-edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSignupEdit(); });
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    renderDashboard();
+    loadAccounts();
+    loadApiIps();
+    loadOtpServers();
+    loadLiveTestIps();
+    loadCallbackTasks();
+    loadConfig();
+    loadCipherStatus();
+    refreshCaptchaCount();
+    api('/api/bot/status').then(s => {
+      updateGlobalStatus(s.running || []);
+      if (s.autoStart) document.getElementById('btn-cancel-auto').disabled = false;
+    });
+
+    // ─── Cipher Keys ─────────────────────────────────────────────────────────
+    async function loadCipherStatus() {
+      try {
+        // Reflect any in-progress auto-pull (e.g. after a page reload).
+        api('/api/cipher/auto-pull/status').then(s => {
+          if (s) setCipherAutoPullUI(!!s.running, s.attempts);
+        }).catch(() => {});
+
+        const data = await api('/api/cipher/status');
+        const el = document.getElementById('cipher-status-content');
+        const pulledEl = document.getElementById('cipher-pulled-at');
+
+        if (data.pulledAt) {
+          const d = new Date(data.pulledAt);
+          pulledEl.textContent = 'Last pulled: ' + d.toLocaleString();
+        } else {
+          pulledEl.textContent = 'Never pulled';
+        }
+
+        if (!data.hasKeys) {
+          el.innerHTML = `<div style="color:var(--warn); font-size:13px; padding:20px; grid-column:span 2; text-align:center;">
+            ⚠️ No cipher keys in database. Click <strong>Pull Latest Keys</strong> to fetch from the live IVAC website.
+          </div>`;
+          return;
+        }
+
+        let html = '';
+
+        // Bundle info
+        if (data.bundleFile) {
+          html += `<div style="grid-column:span 2; padding:8px 12px; background:var(--bg1); border-radius:6px; border:1px solid var(--border); font-size:12px;">
+            <span style="color:var(--muted)">Bundle:</span> <strong style="font-family:'JetBrains Mono',monospace; color:var(--accent)">${escapeHtml(data.bundleFile)}</strong>
+          </div>`;
+        }
+
+        // Alphabet info
+        if (data.alphabet) {
+          html += `<div style="grid-column:span 2; padding:8px 12px; background:var(--bg1); border-radius:6px; border:1px solid var(--border); font-size:12px;">
+            <span style="color:var(--muted)">Alphabet:</span> <code style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent2)">${escapeHtml(data.alphabet)}</code>
+            <span style="color:var(--muted); margin-left:8px;">(${data.alphabetLength} chars)</span>
+          </div>`;
+        }
+
+        // SignIn card
+        html += renderCipherCard('SignIn', data.signin, 'var(--success)');
+        // Reserve card
+        html += renderCipherCard('Reserve Slot', data.reserve, 'var(--accent2)');
+
+        el.innerHTML = html;
+      } catch (e) {
+        console.error('Failed to load cipher status:', e);
+      }
+    }
+
+    function renderCipherCard(title, info, color) {
+      if (!info) {
+        return `<div style="border:1px solid var(--border); padding:14px; border-radius:8px;">
+          <div style="font-weight:600; margin-bottom:8px; color:${color}">${title}</div>
+          <div style="color:var(--muted); font-size:12px;">No keys found</div>
+        </div>`;
+      }
+      return `<div style="border:1px solid var(--border); padding:14px; border-radius:8px;">
+        <div style="font-weight:600; margin-bottom:10px; color:${color}">${title}</div>
+        <div style="display:grid; grid-template-columns: auto 1fr; gap:4px 12px; font-size:12px;">
+          <span style="color:var(--muted)">Key:</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px;">${escapeHtml(info.keyPreview)} (${info.keyLength} chars)</span>
+          <span style="color:var(--muted)">Version:</span>
+          <span><strong>${info.version}</strong> (${escapeHtml(info.algorithm)})</span>
+          <span style="color:var(--muted)">startAt:</span>
+          <span style="font-family:'JetBrains Mono',monospace;">${info.startAt}</span>
+          <span style="color:var(--muted)">length:</span>
+          <span style="font-family:'JetBrains Mono',monospace;">${info.length}</span>
+        </div>
+      </div>`;
+    }
+
+    async function pullCipherKeys() {
+      const btn = document.getElementById('btn-cipher-pull');
+      const logCard = document.getElementById('cipher-pull-log-card');
+      const logEl = document.getElementById('cipher-pull-log');
+      btn.disabled = true;
+      btn.textContent = '⏳ Pulling...';
+      logCard.style.display = 'block';
+      logEl.innerHTML = '<div style="color:var(--muted)">Starting pull...</div>';
+
+      try {
+        const res = await api('/api/cipher/pull', 'POST');
+        if (res.success) {
+          // Show logs
+          if (res.logs && res.logs.length) {
+            logEl.innerHTML = res.logs.map(l => {
+              const color = l.includes('✅') ? 'var(--success)' : l.includes('⚠️') ? 'var(--warn)' : 'var(--text)';
+              return `<div style="color:${color}; margin-bottom:2px;">${escapeHtml(l)}</div>`;
+            }).join('');
+          }
+          toast('✅ Cipher keys pulled successfully!', 'success');
+          loadCipherStatus();
+        } else {
+          toast('❌ Pull failed: ' + (res.error || 'Unknown error'), 'error');
+          logEl.innerHTML += `<div style="color:var(--danger)">Error: ${escapeHtml(res.error || 'Unknown')}</div>`;
+        }
+      } catch (e) {
+        toast('❌ Pull failed: ' + e.message, 'error');
+        logEl.innerHTML += `<div style="color:var(--danger)">Error: ${escapeHtml(e.message)}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Pull Latest Keys';
+      }
+    }
+
+    // ─── Cipher Auto-Pull ────────────────────────────────────────────────────
+    // Keeps retrying the pull on the server until the cipher bundle stops 403'ing.
+    function cipherLog(msg, kind) {
+      const logCard = document.getElementById('cipher-pull-log-card');
+      const logEl = document.getElementById('cipher-pull-log');
+      logCard.style.display = 'block';
+      const color = kind === 'success' ? 'var(--success)'
+        : kind === 'error' ? 'var(--danger)'
+        : kind === 'warn' || (msg && msg.includes('⚠️')) ? 'var(--warn)'
+        : msg && msg.includes('✅') ? 'var(--success)'
+        : 'var(--text)';
+      const div = document.createElement('div');
+      div.style.color = color;
+      div.style.marginBottom = '2px';
+      div.textContent = msg;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setCipherAutoPullUI(running, attempts) {
+      const startBtn = document.getElementById('btn-cipher-autopull');
+      const stopBtn = document.getElementById('btn-cipher-autopull-stop');
+      const pullBtn = document.getElementById('btn-cipher-pull');
+      const statusEl = document.getElementById('cipher-autopull-status');
+      startBtn.style.display = running ? 'none' : '';
+      stopBtn.style.display = running ? '' : 'none';
+      pullBtn.disabled = running;
+      if (running) {
+        statusEl.style.display = '';
+        statusEl.textContent = `♻️ Auto-pulling… (attempt ${attempts || 0})`;
+      } else {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+      }
+    }
+
+    let cipherAutoStartBotsOnPull = false;
+    async function startCipherAutoPull() {
+      // Auto Pull only pulls the captcha/cipher config — it must NOT auto-start all bots.
+      cipherAutoStartBotsOnPull = false;
+      try {
+        document.getElementById('cipher-pull-log').innerHTML = '';
+        setCipherAutoPullUI(true, 0);
+        // Read the interval (ms) from the dashboard input. Blank/invalid → omit it so
+        // the backend uses its DEFAULT_AUTOPULL_INTERVAL_MS fallback.
+        const rawInterval = document.getElementById('cipher-autopull-interval').value;
+        const intervalMs = rawInterval === '' ? undefined : Math.max(0, parseInt(rawInterval, 10));
+        const body = Number.isFinite(intervalMs) ? { intervalMs } : {};
+        // Parallel worker count — each retries through a random proxy; first success wins.
+        const workers = Math.max(1, Math.min(20, parseInt(document.getElementById('cipher-autopull-workers').value, 10) || 5));
+        body.workers = workers;
+        const res = await api('/api/cipher/auto-pull/start', 'POST', body);
+        if (res.started === false) {
+          cipherAutoStartBotsOnPull = false;
+          toast('Auto-pull is already running', 'warn');
+        } else if (res.error) {
+          cipherAutoStartBotsOnPull = false;
+          toast('❌ ' + res.error, 'error');
+          setCipherAutoPullUI(false, 0);
+        }
+      } catch (e) {
+        cipherAutoStartBotsOnPull = false;
+        toast('❌ Failed to start auto-pull: ' + e.message, 'error');
+        setCipherAutoPullUI(false, 0);
+      }
+    }
+
+    async function stopCipherAutoPull() {
+      try {
+        await api('/api/cipher/auto-pull/stop', 'POST', {});
+      } catch (e) {
+        toast('❌ Failed to stop auto-pull: ' + e.message, 'error');
+      }
+    }
+
+    socket.on('cipher_autopull', (ev) => {
+      switch (ev.type) {
+        case 'started':
+          setCipherAutoPullUI(true, ev.attempts);
+          break;
+        case 'progress':
+          setCipherAutoPullUI(true, ev.attempts);
+          if (ev.message) cipherLog(ev.message);
+          break;
+        case 'attempt-failed':
+          setCipherAutoPullUI(true, ev.attempts);
+          break;
+        case 'success':
+          setCipherAutoPullUI(false, ev.attempts);
+          toast('✅ Cipher keys pulled successfully!', 'success');
+          loadCipherStatus();
+          if (cipherAutoStartBotsOnPull) {
+            cipherAutoStartBotsOnPull = false;
+            toast('🚀 Auto-starting all bots...', 'info');
+            startAll();
+          }
+          break;
+        case 'stopped':
+          cipherAutoStartBotsOnPull = false;
+          setCipherAutoPullUI(false, ev.attempts);
+          toast('⏹ Auto-pull stopped', 'warn');
+          break;
+      }
+    });
+
+    // ─── Bundle Probe (endpoint auto-adjust) ─────────────────────────────────
+    function probeLog(msg, kind) {
+      const card = document.getElementById('probe-log-card');
+      const el = document.getElementById('probe-log');
+      card.style.display = 'block';
+      const color = kind === 'error' || (msg && msg.includes('❌')) ? 'var(--danger)'
+        : (msg && (msg.includes('✅') || msg.startsWith('✎'))) ? 'var(--success)'
+        : (msg && msg.includes('⚠️')) ? 'var(--warn)' : 'var(--text)';
+      const div = document.createElement('div');
+      div.style.color = color; div.style.marginBottom = '2px'; div.textContent = msg;
+      el.appendChild(div); el.scrollTop = el.scrollHeight;
+    }
+
+    async function loadProbeStatus() {
+      const content = document.getElementById('probe-status-content');
+      const appliedEl = document.getElementById('probe-applied-at');
+      try {
+        const s = await api('/api/probe/status');
+        appliedEl.textContent = s.appliedAt ? 'applied ' + new Date(s.appliedAt).toLocaleString() : 'never applied';
+        const key = ['signin', 'verifyOtp', 'upload', 'reserve', 'payment'];
+        if (s.lastCapture) {
+          const have = new Set(s.lastCapture.steps || []);
+          const chips = key.map(k => {
+            const ok = have.has(k);
+            return `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; margin-right:4px; background:${ok ? 'var(--success)' : 'var(--bg1)'}; color:${ok ? '#fff' : 'var(--muted)'}; border:1px solid var(--border);">${ok ? '✓' : '·'} ${k}</span>`;
+          }).join('');
+          content.innerHTML = `<div style="margin-bottom:6px;">Last capture: <b>${s.lastCapture.mode}</b> · ${s.lastCapture.count} request(s) · ${new Date(s.lastCapture.probedAt).toLocaleString()}</div><div>${chips}</div>`;
+        } else {
+          content.innerHTML = '<span style="color:var(--muted)">No capture yet. Click <b>Run Probe (auto)</b> to learn the current endpoints.</span>';
+        }
+        setProbeRunning(s.running, s.mode);
+      } catch (e) { content.textContent = 'status error: ' + e.message; }
+    }
+
+    function setProbeRunning(running, mode) {
+      const a = document.getElementById('btn-probe-auto');
+      const b = document.getElementById('btn-probe-attended');
+      a.disabled = running; b.disabled = running;
+      if (running && mode === 'auto') a.textContent = '⏳ Probing…';
+      else a.textContent = '🧭 Run Probe (auto)';
+      if (running && mode === 'attended') b.textContent = '🖐️ Driving… (close browser when done)';
+      else b.textContent = '🖐️ Probe — I\'ll drive';
+    }
+
+    async function runProbe(mode) {
+      document.getElementById('probe-log').innerHTML = '';
+      probeLog(mode === 'attended'
+        ? 'Opening a browser — drive your flow, then CLOSE the window to finish.'
+        : 'Running the offline bundle walk…');
+      setProbeRunning(true, mode);
+      try {
+        const res = await api('/api/probe/run', 'POST', { mode });
+        if (mode === 'attended') {
+          if (res.started) toast('🖐️ Browser opened — drive your flow, then close it.', 'info');
+          else { toast('❌ ' + (res.error || 'could not start'), 'error'); setProbeRunning(false); }
+          return; // completion arrives via socket 'probe_done'
+        }
+        if (res.success) {
+          const n = Object.keys(res.applied || {}).length;
+          probeLog(`✅ Captured ${res.count} request(s); applied ${n} config change(s).`, 'success');
+          toast(`✅ Probe done — ${n} endpoint change(s) applied`, 'success');
+        } else {
+          probeLog('❌ ' + (res.error || 'failed'), 'error');
+          toast('❌ Probe failed: ' + (res.error || ''), 'error');
+        }
+      } catch (e) {
+        probeLog('❌ ' + e.message, 'error');
+        toast('❌ Probe failed: ' + e.message, 'error');
+      } finally {
+        if (mode !== 'attended') setProbeRunning(false);
+        loadProbeStatus();
+      }
+    }
+
+    socket.on('probe_log', (ev) => probeLog(ev.msg, ev.level));
+    socket.on('probe_done', (ev) => {
+      const n = Object.keys(ev.applied || {}).length;
+      probeLog(`✅ ${ev.mode} probe done — ${ev.count} request(s), ${n} config change(s) applied.`, 'success');
+      toast(`✅ Probe applied ${n} endpoint change(s)`, 'success');
+      setProbeRunning(false);
+      loadProbeStatus();
+    });
+
+    async function testCipherEncrypt() {
+      await testCipher('encrypt');
+    }
+    async function testCipherDecrypt() {
+      await testCipher('decrypt');
+    }
+
+    async function testCipher(action) {
+      const token = document.getElementById('cipher-test-input').value.trim();
+      const flow = document.getElementById('cipher-test-flow').value;
+      if (!token) return toast('Paste a captcha token first', 'error');
+
+      try {
+        const res = await api('/api/cipher/test', 'POST', { token, flow, action });
+        if (res.error) {
+          toast(res.error, 'error');
+          return;
+        }
+        document.getElementById('cipher-test-result').style.display = 'block';
+        document.getElementById('cipher-test-output').textContent = res.output;
+        document.getElementById('cipher-test-params').textContent =
+          `Flow: ${res.flow} | Key: ${res.params.keyPreview} | v${res.params.version} (${res.params.algorithm}) | startAt: ${res.params.startAt} | length: ${res.params.length}`;
+      } catch (e) {
+        toast('Test failed: ' + e.message, 'error');
+      }
+    }
+
+  </script>
+</body>
+
+</html>

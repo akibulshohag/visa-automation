@@ -1,0 +1,36 @@
+{
+  "name": "visa-sass",
+  "version": "1.0.0",
+  "main": "tempermonkey.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "acorn": "^8.17.0",
+    "axios": "^1.13.6",
+    "cloudscraper": "^4.6.0",
+    "dotenv": "^17.3.1",
+    "electron": "^41.1.0",
+    "express": "^5.2.1",
+    "got-scraping": "^4.2.1",
+    "httpcloak": "^1.6.7",
+    "https-proxy-agent": "^7.0.6",
+    "multer": "^2.2.0",
+    "mysql2": "^3.19.0",
+    "node-fetch": "^2.7.0",
+    "node-tls-client": "^2.1.0",
+    "pdf-lib": "^1.17.1",
+    "proxy-chain": "^3.0.0",
+    "puppeteer": "^24.40.0",
+    "puppeteer-real-browser": "^1.4.4",
+    "sharp": "^0.35.3",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "winston": "^3.19.0"
+  }
+}
