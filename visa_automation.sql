@@ -60,7 +60,7 @@ INSERT INTO `accounts` (`id`, `phone`, `password`, `status`, `last_run`, `create
 DROP TABLE IF EXISTS `config`;
 CREATE TABLE IF NOT EXISTS `config` (
   `key` varchar(100) NOT NULL,
-  `value` text NOT NULL,
+  `value` mediumtext NOT NULL,
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

@@ -82,6 +82,20 @@ class CaptchaSolver {
                 websiteKey: this.siteKey
             };
 
+            // Solve THROUGH the same proxy the sign-in/reserve request will be submitted from.
+            // Without this, CapMonster solves the Turnstile challenge from its own IP pool while
+            // the actual API call goes out via the account's proxy — Cloudflare mints the token
+            // for the solving IP, so a different submitting IP gets it rejected downstream as
+            // "Captcha verification failed" even though the token itself was solved successfully.
+            // (this.proxyDetails was being parsed and logged but never actually sent — dead code.)
+            if (this.proxyDetails && this.proxyDetails.proxyAddress) {
+                taskPayload.proxyType = this.proxyDetails.proxyType;
+                taskPayload.proxyAddress = this.proxyDetails.proxyAddress;
+                taskPayload.proxyPort = this.proxyDetails.proxyPort;
+                if (this.proxyDetails.proxyLogin) taskPayload.proxyLogin = this.proxyDetails.proxyLogin;
+                if (this.proxyDetails.proxyPassword) taskPayload.proxyPassword = this.proxyDetails.proxyPassword;
+            }
+
             const response = await axios.post(`${CAPTCHA_SOLVER_BASE_API}createTask`, {
                 clientKey: clientKey,
                 task: taskPayload

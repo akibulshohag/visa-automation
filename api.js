@@ -563,11 +563,12 @@ class IvacApi {
             processedToken = encryptCaptcha(captchaToken, 'signin');
         }
         const body = { phone, password, c: processedToken };
-        // v23-sign-in rejects requests that lack the site's static "navigation state" header (the
+        // v3-sign-in rejects requests that lack the site's static "navigation state" header (the
         // browser sends it on every login POST; without it the API 500s). It's a fixed UUID baked
         // into the frontend bundle — kept in config so it can be updated if the site rotates it.
-        // NOTE: the version segment rotates (…was v12, bundle mrx52llu-V6dyI3yh.js as of 2026-07-23
-        // is v23). If sign-in starts 404-ing, re-check `/auth/vNN-sign-in` in the current bundle.
+        // NOTE: the version segment rotates (…v12 -> v23 -> as of bundle mtv1rx02-e9bAiBuo.js on
+        // 2026-09-17 it's back down to v3). If sign-in starts 403/404-ing, re-check
+        // `/auth/vNN-sign-in` in the current bundle (search for "sign-in" in the pulled bundle).
         // Full recipe replay first (auto-adjusts any url/header/body change); fall back to hardcoded.
         const built = this._buildRecipeRequest('signin', { phone, password, captcha: processedToken });
         if (built) {
@@ -575,9 +576,9 @@ class IvacApi {
         }
         const navState = this.config.ep_signin_nav_state || '80d51dc5-af20-46fa-a7bb-e6a8f3f80065';
         const extraHeaders = { 'x-sec-navigation-state': navState };
-        // Path is version-suffixed (…v23) and rotates; the Bundle Probe writes ep_signin_path so
+        // Path is version-suffixed (…v3) and rotates; the Bundle Probe writes ep_signin_path so
         // a rotation auto-adjusts without a code edit. Hardcoded value stays as the fallback.
-        const signinPath = this.config.ep_signin_path || 'v1/auth/v23-sign-in';
+        const signinPath = this.config.ep_signin_path || 'v1/auth/v3-sign-in';
         return await this.callApi(signinPath, 'POST', body, this.config.ep_signin_url, parseInt(this.config.ep_signin_ip_count) || 1, abortController, 0, extraHeaders);
     }
 

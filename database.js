@@ -124,9 +124,14 @@ async function initDb() {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS config (
                 \`key\` VARCHAR(100) PRIMARY KEY,
-                value TEXT NOT NULL
+                value MEDIUMTEXT NOT NULL
             )
         `);
+        // Older installs created this table with a plain TEXT column (64KB cap). The cipher
+        // key puller now saves a ~110KB+ native-modules JSON blob per pull, which overflows
+        // that cap with "Data too long for column 'value'". Widen it in place, every startup —
+        // MODIFY COLUMN is a no-op once it's already MEDIUMTEXT, so this is safe to repeat.
+        await pool.query(`ALTER TABLE config MODIFY COLUMN value MEDIUMTEXT NOT NULL`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS logs (

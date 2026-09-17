@@ -9,3 +9,6 @@ yarn.lock
 last-bundle.local.js
 last-bundle.local.json
 probe-capture.json
+
+# Full DB export (real account passwords, access tokens, proxy credentials) — never commit
+full_db_export.sql

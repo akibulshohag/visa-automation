@@ -66,29 +66,35 @@ function patternNames(node, out) {
 }
 
 // ─── Scope model ───────────────────────────────────────────────────────────────
-// A scope is created for Program + every function-like node. `bindings` maps each name
-// declared DIRECTLY in that scope (functions, vars, params, class ids) to its declaration
-// node — without descending into nested function scopes (those get their own scope).
+// Two kinds of scope, matching real JS semantics — collapsing them into one (the original
+// approach) is what broke on 2026-09-17's bundle: a sibling `if (…) { const t = … }` block
+// declares its OWN `t`, block-scoped to just that `if`. The flat model bound every `const`/
+// `let` found anywhere in the enclosing function to ONE map, so the later (unrelated) inner
+// `t` silently overwrote the real outer `const t = "69mu"` that a captcha-secret property
+// actually referenced — producing a `t` that was `undefined` at eval time.
+//  - FUNCTION scope (Program / function-like node): params, the function's own name, and
+//    every `var` + function-declaration in its body — hoisted from ANY nesting depth of
+//    blocks (but not through a nested function, which hoists to itself instead).
+//  - BLOCK scope (every BlockStatement that isn't a function's own top-level body): holds
+//    `let`/`const`/`class` declared DIRECTLY in that block only — invisible to sibling blocks.
 function makeScope(node, parent) { return { node, parent, bindings: new Map() }; }
 
-function collectBindings(scope, bodyNode) {
+// Collect every `var` and function-declaration hoisted into a function/program scope —
+// recursing through nested blocks/control-structures, but NOT into nested function bodies
+// (those get their own scope when the main walk reaches them).
+function collectHoisted(scope, bodyNode) {
     const visit = (n) => {
         if (!n) return;
-        // A nested function contributes only its NAME to this scope; its body is a
-        // different scope, so don't descend into it here.
         if (isFn(n)) { if (n.type === 'FunctionDeclaration' && n.id) scope.bindings.set(n.id.name, n); return; }
-        switch (n.type) {
-            case 'ClassDeclaration': if (n.id) scope.bindings.set(n.id.name, n); return;
-            case 'VariableDeclaration':
-                for (const d of n.declarations) {
-                    const names = []; patternNames(d.id, names);
-                    for (const nm of names) scope.bindings.set(nm, d);
-                }
-                break;
+        if (n.type === 'ClassDeclaration') return; // block-scoped — handled by collectBlockLocals
+        if (n.type === 'VariableDeclaration' && n.kind === 'var') {
+            for (const d of n.declarations) {
+                const names = []; patternNames(d.id, names);
+                for (const nm of names) scope.bindings.set(nm, d);
+            }
         }
         eachChild(n, visit);
     };
-    // The scope function's own params + name bind in this scope.
     if (isFn(scope.node)) {
         for (const p of scope.node.params) { const names = []; patternNames(p, names); for (const nm of names) scope.bindings.set(nm, scope.node); }
         if (scope.node.type === 'FunctionDeclaration' && scope.node.id) scope.bindings.set(scope.node.id.name, scope.node);
@@ -97,32 +103,67 @@ function collectBindings(scope, bodyNode) {
     for (const s of (Array.isArray(body) ? body : [body])) visit(s);
 }
 
-// Build every scope, tag each node with the scope it lives in (`__scope`), and collect the
-// rotation side-effects (see below).
+// Bind `let`/`const`/`class` declared DIRECTLY in one block's statement list — one level,
+// never descending into nested blocks or functions (they get their own scope).
+function collectBlockLocals(scope, stmts) {
+    for (const n of stmts) {
+        if (!n) continue;
+        if (n.type === 'VariableDeclaration' && n.kind !== 'var') {
+            for (const d of n.declarations) {
+                const names = []; patternNames(d.id, names);
+                for (const nm of names) scope.bindings.set(nm, d);
+            }
+        } else if (n.type === 'ClassDeclaration' && n.id) {
+            scope.bindings.set(n.id.name, n);
+        }
+    }
+}
+
+// Build every scope, tag each node with the LEXICAL scope it lives in (`__scope`), and
+// collect the rotation side-effects (see below).
 function buildModel(ast) {
     const rotations = []; // { node, argNames:Set } — string-array shuffle IIFEs
-    (function walk(node, parentScope) {
-        let scope = parentScope;
+
+    // A rotation is `!function(e){…}(ARR)` / `fn(ARR)` as a statement: it reorders the
+    // obfuscator string array at load. It lives inside the module closure, so we scan at
+    // every depth (not just Program level). We don't filter by arg name here — the caller
+    // keeps only the one whose argument is the string-array function it actually collected.
+    const markRotation = (node) => {
+        if (node.type !== 'ExpressionStatement') return;
+        let expr = node.expression;
+        while (expr && expr.type === 'UnaryExpression') expr = expr.argument;
+        if (expr && expr.type === 'CallExpression') {
+            const argNames = new Set();
+            for (const a of expr.arguments) if (a.type === 'Identifier') argNames.add(a.name);
+            if (argNames.size) rotations.push({ node, argNames });
+        }
+    };
+
+    (function walk(node, lexScope, skipOwnBlockScope) {
+        markRotation(node);
+
         if (node.type === 'Program' || isFn(node)) {
-            scope = makeScope(node, parentScope);
-            collectBindings(scope, node.type === 'Program' ? node : node.body);
+            const fScope = makeScope(node, lexScope);
+            collectHoisted(fScope, node.type === 'Program' ? node : node.body);
+            const bodyNode = node.type === 'Program' ? node : node.body;
+            if (bodyNode.type === 'BlockStatement' || node.type === 'Program') collectBlockLocals(fScope, bodyNode.body);
+            node.__scope = fScope;
+            eachChild(node, (c) => walk(c, fScope, c === bodyNode));
+            return;
         }
-        node.__scope = scope;
-        // A rotation is `!function(e){…}(ARR)` / `fn(ARR)` as a statement: it reorders the
-        // obfuscator string array at load. It lives inside the module closure, so we scan at
-        // every depth (not just Program level). We don't filter by arg name here — the caller
-        // keeps only the one whose argument is the string-array function it actually collected.
-        if (node.type === 'ExpressionStatement') {
-            let expr = node.expression;
-            while (expr && expr.type === 'UnaryExpression') expr = expr.argument;
-            if (expr && expr.type === 'CallExpression') {
-                const argNames = new Set();
-                for (const a of expr.arguments) if (a.type === 'Identifier') argNames.add(a.name);
-                if (argNames.size) rotations.push({ node, argNames });
-            }
+
+        if (node.type === 'BlockStatement' && !skipOwnBlockScope) {
+            const bScope = makeScope(node, lexScope);
+            collectBlockLocals(bScope, node.body);
+            node.__scope = bScope;
+            eachChild(node, (c) => walk(c, bScope, false));
+            return;
         }
-        eachChild(node, (c) => walk(c, scope));
-    })(ast, null);
+
+        node.__scope = lexScope;
+        eachChild(node, (c) => walk(c, lexScope, false));
+    })(ast, null, false);
+
     return { rotations };
 }
 
